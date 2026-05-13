@@ -21,6 +21,7 @@ services:
       - name: user-route
         paths:
           - /users
+        strip_path: false
       - name: user-swagger-route
         paths:
           - /user-service
@@ -96,6 +97,18 @@ services:
       - name: simulation-swagger-route
         paths:
           - /simulation-service
+        strip_path: true
+
+  # 9. Lưu trữ media và file (Cloudflare R2)
+  - name: media-service
+    url: http://media-service:3000
+    routes:
+      - name: media-route
+        paths:
+          - /media
+      - name: media-swagger-route
+        paths:
+          - /media-service
         strip_path: true
 
   # 9. Swagger UI tập trung

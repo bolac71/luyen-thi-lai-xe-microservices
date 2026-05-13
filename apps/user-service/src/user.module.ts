@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { EventPublisher } from './application/ports/event-publisher.port';
@@ -12,12 +12,12 @@ import { UpdateUserProfileUseCase } from './application/use-cases/update-user-pr
 import { UserProfileRepository } from './domain/repositories/user-profile.repository';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
 import {
+  MEDIA_SERVICE_CLIENT,
   RABBITMQ_CLIENT,
   RabbitMqEventPublisher,
 } from './infrastructure/messaging/rabbitmq-event-publisher.service';
 import { PrismaUserProfileRepository } from './infrastructure/persistence/prisma/prisma-user-profile.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
-import { AuthContextMiddleware } from './infrastructure/middleware/auth-context.middleware';
 import { UserController } from './presentation/http/user.controller';
 import { MessagingController } from './presentation/messaging/messaging.controller';
 
@@ -31,9 +31,23 @@ import { MessagingController } from './presentation/messaging/messaging.controll
           transport: Transport.RMQ,
           options: {
             urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://localhost:5672',
+              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
             ],
             queue: 'user_service_publish',
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+      {
+        name: MEDIA_SERVICE_CLIENT,
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [
+              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
+            ],
+            queue: 'media_service_events',
             queueOptions: { durable: true },
           },
         }),
@@ -42,17 +56,12 @@ import { MessagingController } from './presentation/messaging/messaging.controll
   ],
   controllers: [UserController, MessagingController],
   providers: [
-    // Infrastructure
     PrismaService,
     DomainExceptionFilter,
 
-    // Repository binding
     { provide: UserProfileRepository, useClass: PrismaUserProfileRepository },
-
-    // EventPublisher binding
     { provide: EventPublisher, useClass: RabbitMqEventPublisher },
 
-    // Use cases
     CreateUserProfileUseCase,
     UpdateUserProfileUseCase,
     GetUserProfileUseCase,
@@ -62,8 +71,4 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     SyncUserRoleUseCase,
   ],
 })
-export class UserModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(AuthContextMiddleware).forRoutes(UserController);
-  }
-}
+export class UserModule {}

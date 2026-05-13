@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run start:dev --filter=\"./apps/*\"",
+    "dev": "turbo run start:dev --filter=\"./apps/*\" --concurrency=15",
     "lint": "turbo run lint",
     "format": "biome format --write .",
     "check": "biome check --write .",
@@ -24,6 +24,10 @@
     "*.{js,ts,jsx,tsx}": [
       "biome check --write --no-errors-on-unmatched"
     ]
+  },
+  "optionalDependencies": {
+    "@biomejs/cli-linux-x64": "2.4.13",
+    "@biomejs/cli-win32-x64": "2.4.13"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",

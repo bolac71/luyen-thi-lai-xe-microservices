@@ -98,12 +98,36 @@ services:
     volumes:
       - db_simulation_data:/var/lib/postgresql/data
 
+  db-media:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: media_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5440:5432"
+    volumes:
+      - db_media_data:/var/lib/postgresql/data
+
   # ── Message Broker ─────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports:
       - "5672:5672"
       - "15672:15672"
+
+  # ── Token Blacklist Cache ───────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis_data:/data
 
   # ── Config Server ──────────────────────────────────────────
   consul:
@@ -147,7 +171,9 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
-    command: start-dev
+    # --import-realm: tự động import tất cả *.json trong /opt/keycloak/data/import/
+    # khi realm chưa tồn tại (idempotent – restart an toàn)
+    command: start-dev --import-realm
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db-keycloak:5432/keycloak_db
@@ -157,8 +183,11 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_URL: "http://localhost:8080"
     ports:
       - "8080:8080"
+    volumes:
+      - ./docker/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     depends_on:
       - db-keycloak
 
@@ -191,5 +220,7 @@ volumes:
   db_notification_data:
   db_analytics_data:
   db_simulation_data:
+  db_media_data:
   consul_data:
   db_keycloak_data:
+  redis_data:
