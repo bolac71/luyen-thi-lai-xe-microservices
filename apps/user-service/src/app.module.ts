@@ -29,10 +29,7 @@ import { UserModule } from './user.module';
                 'test',
               )
               .default('development'),
-            port: Joi.number().default(3000),
             database: Joi.object({
-              url: Joi.string().required(),
-              poolSize: Joi.number().default(10),
               connectionTimeout: Joi.number().default(5000),
             }).optional(),
             rabbitmq: Joi.object({
