@@ -39,7 +39,7 @@ model UserProfile {
   phoneNumber String?   @unique
   dateOfBirth DateTime?
   avatarUrl   String?
-  mediaFileId String?   @map("media_file_id")
+  mediaFileId String?
   gender      Gender?
   address     String?
   role        Role

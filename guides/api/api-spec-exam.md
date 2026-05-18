@@ -1,7 +1,7 @@
 # Exam Service API Specification
 
 **Base URL qua Kong:** `http://localhost:8000`  
-**Service path:** `/exams`  
+**Service paths:** `/exams`, `/admin/exams/templates`  
 **Direct local:** `http://localhost:3003`  
 **Swagger UI:** `http://localhost:3003/docs`  
 **Swagger UI qua Kong:** `http://localhost:8000/exam-service/docs`  
@@ -9,11 +9,40 @@
 **OpenAPI JSON qua Kong:** `http://localhost:8000/exam-service/docs-json`  
 **Version:** 1.0.0
 
-Business API path là `/exams/*`; Swagger/docs path là `/exam-service/docs`.
+Exam-service dùng `ApiResponseInterceptor` từ `@repo/common`, nên tất cả HTTP success response đều được bọc trong format chung:
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/available",
+  "data": {}
+}
+```
+
+Lỗi domain và validation cũng dùng format chung:
+
+```json
+{
+  "success": false,
+  "code": "EXAM_SESSION_NOT_FOUND",
+  "message": "Exam session not found: session-uuid",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions/session-uuid/result"
+}
+```
+
+---
 
 ## Authentication
 
-Exam-service validate JWT/RBAC tại service bằng `nest-keycloak-connect`. Frontend gọi qua Kong và gửi `Authorization: Bearer <access_token>`.
+Exam-service validate JWT/RBAC tại service bằng `nest-keycloak-connect`. Frontend gọi qua Kong và gửi:
+
+```http
+Authorization: Bearer <access_token>
+```
 
 | Endpoint | Role |
 | --- | --- |
@@ -30,7 +59,9 @@ Exam-service validate JWT/RBAC tại service bằng `nest-keycloak-connect`. Fro
 | `POST /exams/sessions/:id/submit` | `STUDENT`, owner only |
 | `GET /exams/sessions/:id/result` | `STUDENT`, owner only |
 
-Exam-service gọi nội bộ `question-service /admin/questions/pool` bằng Keycloak client-credentials token. Không expose endpoint pool trực tiếp cho student.
+Exam-service gọi nội bộ `question-service /admin/questions/pool` bằng Keycloak client-credentials token. Endpoint pool không expose trực tiếp cho student.
+
+---
 
 ## Error Codes
 
@@ -42,12 +73,37 @@ Exam-service gọi nội bộ `question-service /admin/questions/pool` bằng Ke
 | 409 | `EXAM_TEMPLATE_VERSION_CONFLICT`, `EXAM_TEMPLATE_IN_USE`, `EXAM_SESSION_ALREADY_FINISHED`, `EXAM_SESSION_EXPIRED` |
 | 422 | `EXAM_TEMPLATE_INACTIVE`, `STUDENT_PROFILE_INVALID`, `EXAM_SESSION_NOT_FINISHED`, `INSUFFICIENT_QUESTION_POOL` |
 
+---
+
 ## Enums
 
 `LicenseCategory`: `A1` | `A2` | `B1` | `B2` | `C` | `D` | `E` | `F`  
 `ExamSessionStatus`: `IN_PROGRESS` | `COMPLETED` | `TIMED_OUT` | `CANCELLED`
 
-## Student-Facing Question Confidentiality
+---
+
+## Shared Shapes
+
+### Exam Template
+
+```json
+{
+  "id": "template-uuid",
+  "name": "Đề thi B2 cơ bản",
+  "licenseCategory": "B2",
+  "totalQuestions": 30,
+  "passingScore": 26,
+  "durationMinutes": 20,
+  "isActive": true,
+  "isDeleted": false,
+  "version": 1,
+  "createdById": "admin-user-id",
+  "createdAt": "2026-05-18T10:00:00.000Z",
+  "updatedAt": "2026-05-18T10:00:00.000Z"
+}
+```
+
+### Student-Safe Question
 
 Student-facing question payload intentionally excludes `correctOptionId`, `options[].isCorrect`, explanation, and scoring metadata.
 
@@ -55,9 +111,19 @@ Student-facing question payload intentionally excludes `correctOptionId`, `optio
 {
   "questionId": "question-uuid",
   "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+  "imageUrl": null,
+  "mediaFileId": "media-file-uuid",
   "options": [
-    { "id": "option-1", "content": "Dừng lại", "displayOrder": 1 },
-    { "id": "option-2", "content": "Đi tiếp", "displayOrder": 2 }
+    {
+      "id": "option-1",
+      "content": "Dừng lại",
+      "displayOrder": 1
+    },
+    {
+      "id": "option-2",
+      "content": "Đi tiếp",
+      "displayOrder": 2
+    }
   ],
   "displayOrder": 1,
   "isCritical": false,
@@ -66,38 +132,128 @@ Student-facing question payload intentionally excludes `correctOptionId`, `optio
 }
 ```
 
+If `mediaFileId` is present, frontend should call `GET /media/files/:mediaFileId/url` and use the returned presigned URL as the image `src`. `imageUrl` is a stable blob URL/fallback and may not be directly readable when the Azure container is private.
+
+### Exam Session
+
+For active sessions, `questions[].isCorrect` is not returned.
+
+```json
+{
+  "id": "session-uuid",
+  "studentId": "student-user-id",
+  "templateId": "template-uuid",
+  "licenseCategory": "B2",
+  "status": "IN_PROGRESS",
+  "score": null,
+  "isPassed": null,
+  "failedByCritical": false,
+  "startedAt": "2026-05-18T10:00:00.000Z",
+  "finishedAt": null,
+  "expiresAt": "2026-05-18T10:20:00.000Z",
+  "questions": [
+    {
+      "questionId": "question-uuid",
+      "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+      "imageUrl": null,
+      "mediaFileId": "media-file-uuid",
+      "options": [
+        {
+          "id": "option-1",
+          "content": "Dừng lại",
+          "displayOrder": 1
+        }
+      ],
+      "displayOrder": 1,
+      "isCritical": false,
+      "isBookmarked": false,
+      "selectedOptionId": null
+    }
+  ]
+}
+```
+
+### Exam Result
+
+Submit/result responses include `questions[].isCorrect`, but still do not expose `correctOptionId` or `options[].isCorrect`.
+
+```json
+{
+  "id": "session-uuid",
+  "studentId": "student-user-id",
+  "templateId": "template-uuid",
+  "licenseCategory": "B2",
+  "status": "COMPLETED",
+  "score": 26,
+  "isPassed": true,
+  "failedByCritical": false,
+  "startedAt": "2026-05-18T10:00:00.000Z",
+  "finishedAt": "2026-05-18T10:15:00.000Z",
+  "expiresAt": "2026-05-18T10:20:00.000Z",
+  "questions": [
+    {
+      "questionId": "question-uuid",
+      "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+      "imageUrl": null,
+      "mediaFileId": "media-file-uuid",
+      "options": [
+        {
+          "id": "option-1",
+          "content": "Dừng lại",
+          "displayOrder": 1
+        }
+      ],
+      "displayOrder": 1,
+      "isCritical": false,
+      "isBookmarked": false,
+      "selectedOptionId": "option-1",
+      "isCorrect": true
+    }
+  ]
+}
+```
+
+---
+
 ## Endpoints
 
 ### GET `/exams/available`
 
 List active exam templates that the current student can start. Frontend should call this endpoint before `POST /exams/sessions`.
 
-Auth: `STUDENT`. The service reads `JWT.sub`, calls `user-service /users/me` using the same bearer token, and matches templates by `studentDetail.licenseTier`.
+**Auth:** `STUDENT`. Service reads `JWT.sub`, calls `user-service /users/me` using the same bearer token, and matches templates by `studentDetail.licenseTier`.
 
-Query params:
+**Query**
 
 | Param | Type | Default | Validation |
 | --- | --- | ---: | --- |
 | `page` | number | 1 | integer, `>= 1` |
 | `size` | number | 20 | integer, `1..100` |
 
-Response `200 OK`:
+**Response `200 OK`**
 
 ```json
 {
-  "items": [
-    {
-      "id": "template-uuid",
-      "name": "Đề thi B2 cơ bản",
-      "licenseCategory": "B2",
-      "totalQuestions": 30,
-      "passingScore": 26,
-      "durationMinutes": 20
-    }
-  ],
-  "total": 1,
-  "page": 1,
-  "size": 20
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/available",
+  "data": {
+    "items": [
+      {
+        "id": "template-uuid",
+        "name": "Đề thi B2 cơ bản",
+        "licenseCategory": "B2",
+        "totalQuestions": 30,
+        "passingScore": 26,
+        "durationMinutes": 20
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "size": 20
+  }
 }
 ```
 
@@ -105,9 +261,11 @@ Student-safe response intentionally excludes admin metadata: `createdById`, `isD
 
 Behavior:
 
-- inactive, deleted, or different-license templates are not returned.
-- student with `studentDetail.licenseTier = null` receives an empty list.
-- inactive/non-student/missing student detail profile returns `STUDENT_PROFILE_INVALID`.
+- Inactive, deleted, or different-license templates are not returned.
+- Student with `studentDetail.licenseTier = null` receives an empty list.
+- Inactive/non-student/missing student detail profile returns `STUDENT_PROFILE_INVALID`.
+
+---
 
 ### POST `/admin/exams/templates`
 
@@ -132,14 +290,38 @@ Create an exam template. This is an admin-only blueprint; students do not call t
 | `name` | string | Yes | non-empty | Display name shown to admins and students through `GET /exams/available`. |
 | `licenseCategory` | LicenseCategory | Yes | enum | License tier this template belongs to. |
 | `totalQuestions` | number | Yes | integer, `>= 1` | Number of questions pulled from question-service when a session starts. |
-| `passingScore` | number | Yes | integer, `1..totalQuestions` | Minimum score to pass, unless failed by critical question. |
+| `passingScore` | number | Yes | integer, `>= 1` | Minimum score to pass; domain rejects invalid values. |
 | `durationMinutes` | number | Yes | integer, `1..180` | Session time limit. |
 
 **Response `201 Created`**
 
-`data` is `ExamTemplateResponse` with `version=1`, `isActive=true`, `isDeleted=false`.
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Created",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/admin/exams/templates",
+  "data": {
+    "id": "template-uuid",
+    "name": "Đề thi B2 cơ bản",
+    "licenseCategory": "B2",
+    "totalQuestions": 30,
+    "passingScore": 26,
+    "durationMinutes": 20,
+    "isActive": true,
+    "isDeleted": false,
+    "version": 1,
+    "createdById": "admin-user-id",
+    "createdAt": "2026-05-18T10:00:00.000Z",
+    "updatedAt": "2026-05-18T10:00:00.000Z"
+  }
+}
+```
 
 Frontend/admin UI note: store `version` from this response if the next action is update/delete.
+
+---
 
 ### GET `/admin/exams/templates`
 
@@ -163,11 +345,14 @@ List templates for admin management.
 {
   "success": true,
   "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/admin/exams/templates",
   "data": {
     "items": [
       {
         "id": "template-uuid",
-        "name": "De thi B2 co ban",
+        "name": "Đề thi B2 cơ bản",
         "licenseCategory": "B2",
         "totalQuestions": 30,
         "passingScore": 26,
@@ -176,8 +361,8 @@ List templates for admin management.
         "isDeleted": false,
         "version": 1,
         "createdById": "admin-user-id",
-        "createdAt": "2026-05-14T10:00:00.000Z",
-        "updatedAt": "2026-05-14T10:00:00.000Z"
+        "createdAt": "2026-05-18T10:00:00.000Z",
+        "updatedAt": "2026-05-18T10:00:00.000Z"
       }
     ],
     "total": 1,
@@ -186,6 +371,8 @@ List templates for admin management.
   }
 }
 ```
+
+---
 
 ### GET `/admin/exams/templates/:id`
 
@@ -199,9 +386,35 @@ Get one template for admin edit/detail screen.
 | --- | --- | --- | --- |
 | `id` | UUID | Yes | Exam template id. |
 
-**Response `200 OK`:** `data` is `ExamTemplateResponse`.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/admin/exams/templates/template-uuid",
+  "data": {
+    "id": "template-uuid",
+    "name": "Đề thi B2 cơ bản",
+    "licenseCategory": "B2",
+    "totalQuestions": 30,
+    "passingScore": 26,
+    "durationMinutes": 20,
+    "isActive": true,
+    "isDeleted": false,
+    "version": 1,
+    "createdById": "admin-user-id",
+    "createdAt": "2026-05-18T10:00:00.000Z",
+    "updatedAt": "2026-05-18T10:00:00.000Z"
+  }
+}
+```
 
 **Errors:** `EXAM_TEMPLATE_NOT_FOUND` if the id does not exist.
+
+---
 
 ### PATCH `/admin/exams/templates/:id`
 
@@ -230,16 +443,42 @@ Optimistic concurrency uses `version`.
 
 | Field | Type | Required | Validation | Description |
 | --- | --- | --- | --- | --- |
-| `version` | number | Yes | integer | Current version from latest template response. |
+| `version` | number | Yes | integer, `>= 1` | Current version from latest template response. |
 | `name` | string | No | non-empty when present | New display name. |
 | `totalQuestions` | number | No | integer, `>= 1` | New question count. |
-| `passingScore` | number | No | integer, `1..totalQuestions` | New passing score. |
+| `passingScore` | number | No | integer, `>= 1` | New passing score. |
 | `durationMinutes` | number | No | integer, `1..180` | New duration. |
 | `isActive` | boolean | No | boolean | Enable or disable this template for student starts. |
 
-**Response `200 OK`:** `data` is updated `ExamTemplateResponse`; `version` increments.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/admin/exams/templates/template-uuid",
+  "data": {
+    "id": "template-uuid",
+    "name": "Đề thi B2 cập nhật",
+    "licenseCategory": "B2",
+    "totalQuestions": 30,
+    "passingScore": 26,
+    "durationMinutes": 20,
+    "isActive": true,
+    "isDeleted": false,
+    "version": 2,
+    "createdById": "admin-user-id",
+    "createdAt": "2026-05-18T10:00:00.000Z",
+    "updatedAt": "2026-05-18T10:05:00.000Z"
+  }
+}
+```
 
 **Errors:** `EXAM_TEMPLATE_VERSION_CONFLICT`, `INVALID_EXAM_TEMPLATE`, `EXAM_TEMPLATE_NOT_FOUND`.
+
+---
 
 ### DELETE `/admin/exams/templates/:id`
 
@@ -247,23 +486,55 @@ Soft delete an unused template.
 
 **Auth:** `ADMIN`
 
+**Body**
+
 ```json
-{ "version": 1 }
+{
+  "version": 1
+}
 ```
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `version` | number | Yes | Current version from latest template response. |
+| Field | Type | Required | Validation | Description |
+| --- | --- | --- | --- | --- |
+| `version` | number | Yes | integer, `>= 1` | Current version from latest template response. |
 
-**Response `200 OK`:** `data` is template with `isDeleted=true`, `isActive=false`.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/admin/exams/templates/template-uuid",
+  "data": {
+    "id": "template-uuid",
+    "name": "Đề thi B2 cơ bản",
+    "licenseCategory": "B2",
+    "totalQuestions": 30,
+    "passingScore": 26,
+    "durationMinutes": 20,
+    "isActive": false,
+    "isDeleted": true,
+    "version": 2,
+    "createdById": "admin-user-id",
+    "createdAt": "2026-05-18T10:00:00.000Z",
+    "updatedAt": "2026-05-18T10:10:00.000Z"
+  }
+}
+```
 
 Template with sessions returns `EXAM_TEMPLATE_IN_USE`.
+
+---
 
 ### POST `/exams/sessions`
 
 Start exam session for current student. Exam-service validates current profile by calling `user-service /users/me` and checks `studentDetail.licenseTier` against the template.
 
-Auth: `STUDENT`, owner is `JWT.sub`.
+**Auth:** `STUDENT`, owner is `JWT.sub`.
+
+**Body**
 
 ```json
 {
@@ -271,19 +542,65 @@ Auth: `STUDENT`, owner is `JWT.sub`.
 }
 ```
 
-Request DTO:
-
 | Field | Type | Required | Validation | Description |
 | --- | --- | --- | --- | --- |
 | `templateId` | UUID | Yes | `IsUUID` | Template id selected from `GET /exams/available`. |
 
-Response `201 Created`: session bootstrap with student-safe question snapshots. The response includes `questions[]` so frontend can render the exam immediately without a second request.
+**Response `201 Created`**
+
+The response includes `questions[]` so frontend can render the exam immediately without a second request.
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Created",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-user-id",
+    "templateId": "template-uuid",
+    "licenseCategory": "B2",
+    "status": "IN_PROGRESS",
+    "score": null,
+    "isPassed": null,
+    "failedByCritical": false,
+    "startedAt": "2026-05-18T10:00:00.000Z",
+    "finishedAt": null,
+    "expiresAt": "2026-05-18T10:20:00.000Z",
+    "questions": [
+      {
+        "questionId": "question-uuid",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
+        "options": [
+          {
+            "id": "option-1",
+            "content": "Dừng lại",
+            "displayOrder": 1
+          }
+        ],
+        "displayOrder": 1,
+        "isCritical": false,
+        "isBookmarked": false,
+        "selectedOptionId": null
+      }
+    ]
+  }
+}
+```
+
+---
 
 ### GET `/exams/sessions`
 
-List current student exam history. Query params: `page`, `size`, `status`.
+List current student exam history.
 
-Query params:
+**Auth:** `STUDENT`
+
+**Query**
 
 | Param | Type | Default | Validation |
 | --- | --- | ---: | --- |
@@ -291,13 +608,64 @@ Query params:
 | `size` | number | 20 | integer, `1..100` |
 | `status` | ExamSessionStatus | - | optional enum |
 
-Response item shape is `ExamSessionResponse`. For `IN_PROGRESS` sessions, `questions[].isCorrect` is not returned.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions",
+  "data": {
+    "items": [
+      {
+        "id": "session-uuid",
+        "studentId": "student-user-id",
+        "templateId": "template-uuid",
+        "licenseCategory": "B2",
+        "status": "IN_PROGRESS",
+        "score": null,
+        "isPassed": null,
+        "failedByCritical": false,
+        "startedAt": "2026-05-18T10:00:00.000Z",
+        "finishedAt": null,
+        "expiresAt": "2026-05-18T10:20:00.000Z",
+        "questions": [
+          {
+            "questionId": "question-uuid",
+            "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+            "imageUrl": null,
+            "mediaFileId": "media-file-uuid",
+            "options": [
+              {
+                "id": "option-1",
+                "content": "Dừng lại",
+                "displayOrder": 1
+              }
+            ],
+            "displayOrder": 1,
+            "isCritical": false,
+            "isBookmarked": false,
+            "selectedOptionId": null
+          }
+        ]
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "size": 20
+  }
+}
+```
+
+---
 
 ### GET `/exams/sessions/:id/questions`
 
 Return current session questions without answer keys.
 
-Auth: `STUDENT`, owner only. Other students receive `EXAM_SESSION_UNAUTHORIZED`.
+**Auth:** `STUDENT`, owner only. Other students receive `EXAM_SESSION_UNAUTHORIZED`.
 
 **Path params**
 
@@ -311,13 +679,22 @@ Auth: `STUDENT`, owner only. Other students receive `EXAM_SESSION_UNAUTHORIZED`.
 {
   "success": true,
   "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions/session-uuid/questions",
   "data": {
     "items": [
       {
         "questionId": "question-uuid",
-        "content": "Question content",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
         "options": [
-          { "id": "option-1", "content": "Answer A", "displayOrder": 1 }
+          {
+            "id": "option-1",
+            "content": "Dừng lại",
+            "displayOrder": 1
+          }
         ],
         "displayOrder": 1,
         "isCritical": false,
@@ -331,7 +708,15 @@ Auth: `STUDENT`, owner only. Other students receive `EXAM_SESSION_UNAUTHORIZED`.
 
 Frontend note: render questions by `displayOrder`; use `questionId` and `options[].id` for autosave.
 
+---
+
 ### PATCH `/exams/sessions/:id/answers`
+
+Autosave answer and/or bookmark. Autosave is allowed only while session is active and not expired.
+
+**Auth:** `STUDENT`, owner only.
+
+**Body**
 
 ```json
 {
@@ -341,15 +726,59 @@ Frontend note: render questions by `displayOrder`; use `questionId` and `options
 }
 ```
 
-Autosave is allowed only while session is active and not expired.
-
-Request DTO:
-
 | Field | Type | Required | Validation | Description |
 | --- | --- | --- | --- | --- |
-| `questionId` | UUID/string | Yes | non-empty | Question id from session snapshot. |
-| `selectedOptionId` | UUID/string | No | optional | Selected option id. Omit for bookmark-only update. |
-| `isBookmarked` | boolean | No | optional | Bookmark flag. |
+| `questionId` | UUID | Yes | `IsUUID` | Question id from session snapshot. |
+| `selectedOptionId` | UUID/null | No | optional `IsUUID` | Selected option id. Omit for bookmark-only update. |
+| `isBookmarked` | boolean | No | optional boolean | Bookmark flag. |
+
+**Response `200 OK`**
+
+Controller returns the updated active session. `questions[].isCorrect` is not returned.
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions/session-uuid/answers",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-user-id",
+    "templateId": "template-uuid",
+    "licenseCategory": "B2",
+    "status": "IN_PROGRESS",
+    "score": null,
+    "isPassed": null,
+    "failedByCritical": false,
+    "startedAt": "2026-05-18T10:00:00.000Z",
+    "finishedAt": null,
+    "expiresAt": "2026-05-18T10:20:00.000Z",
+    "questions": [
+      {
+        "questionId": "question-uuid",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
+        "options": [
+          {
+            "id": "option-1",
+            "content": "Dừng lại",
+            "displayOrder": 1
+          }
+        ],
+        "displayOrder": 1,
+        "isCritical": false,
+        "isBookmarked": true,
+        "selectedOptionId": "option-uuid"
+      }
+    ]
+  }
+}
+```
+
+---
 
 ### POST `/exams/sessions/:id/submit`
 
@@ -365,9 +794,54 @@ Submit and synchronously grade. Each correct answer is 1 point; wrong/unanswered
 
 **Body:** no body.
 
-Response `200 OK`: result with `questions[].isCorrect`. Result still does not expose `correctOptionId` or `options[].isCorrect`.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions/session-uuid/submit",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-user-id",
+    "templateId": "template-uuid",
+    "licenseCategory": "B2",
+    "status": "COMPLETED",
+    "score": 26,
+    "isPassed": true,
+    "failedByCritical": false,
+    "startedAt": "2026-05-18T10:00:00.000Z",
+    "finishedAt": "2026-05-18T10:15:00.000Z",
+    "expiresAt": "2026-05-18T10:20:00.000Z",
+    "questions": [
+      {
+        "questionId": "question-uuid",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
+        "options": [
+          {
+            "id": "option-1",
+            "content": "Dừng lại",
+            "displayOrder": 1
+          }
+        ],
+        "displayOrder": 1,
+        "isCritical": false,
+        "isBookmarked": false,
+        "selectedOptionId": "option-1",
+        "isCorrect": true
+      }
+    ]
+  }
+}
+```
 
 **Errors:** `EXAM_SESSION_ALREADY_FINISHED`, `EXAM_SESSION_UNAUTHORIZED`, `EXAM_SESSION_NOT_FOUND`.
+
+---
 
 ### GET `/exams/sessions/:id/result`
 
@@ -375,9 +849,56 @@ Return graded result. If session is still `IN_PROGRESS`, returns `EXAM_SESSION_N
 
 **Auth:** `STUDENT`, owner only.
 
-**Response `200 OK`:** same result DTO as submit.
+**Response `200 OK`**
+
+Same shape as `POST /exams/sessions/:id/submit`.
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-18T10:00:00.000Z",
+  "path": "/exams/sessions/session-uuid/result",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-user-id",
+    "templateId": "template-uuid",
+    "licenseCategory": "B2",
+    "status": "COMPLETED",
+    "score": 26,
+    "isPassed": true,
+    "failedByCritical": false,
+    "startedAt": "2026-05-18T10:00:00.000Z",
+    "finishedAt": "2026-05-18T10:15:00.000Z",
+    "expiresAt": "2026-05-18T10:20:00.000Z",
+    "questions": [
+      {
+        "questionId": "question-uuid",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
+        "options": [
+          {
+            "id": "option-1",
+            "content": "Dừng lại",
+            "displayOrder": 1
+          }
+        ],
+        "displayOrder": 1,
+        "isCritical": false,
+        "isBookmarked": false,
+        "selectedOptionId": "option-1",
+        "isCorrect": true
+      }
+    ]
+  }
+}
+```
 
 Frontend note: use this endpoint for result screen refresh/deep link; use submit response for immediate result after finishing.
+
+---
 
 ## Events Published
 

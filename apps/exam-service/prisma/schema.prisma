@@ -73,6 +73,8 @@ model ExamSessionQuestion {
   sessionId        String
   questionId       String
   questionContent  String   @db.Text
+  imageUrl         String?
+  mediaFileId      String?
   optionsSnapshot  Json
   correctOptionId  String
   isCritical       Boolean

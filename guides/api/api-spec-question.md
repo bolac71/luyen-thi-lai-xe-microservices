@@ -9,44 +9,30 @@
 **OpenAPI JSON qua Kong:** `http://localhost:8000/question-service/docs-json`  
 **Version:** 1.0.0
 
-## Auth Update
-
-Question-service hiện validate JWT/RBAC tại service bằng Keycloak guard. Frontend gọi qua Kong và gửi `Authorization: Bearer <access_token>`; Kong forward header này vào service. Service lấy actor id từ `JWT.sub`, còn `x-user-id` chỉ là fallback cho debug/local script cũ.
-
-| Endpoint                                                                                                      | Role                                    |
-| ------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `POST /admin/questions`, `GET /admin/questions`, `GET /admin/questions/:id`, `PATCH /admin/questions/:id`, `DELETE /admin/questions/:id`    | `ADMIN`, `CENTER_MANAGER`               |
-| `POST /admin/questions/topics`, `GET /admin/questions/topics`, `GET /admin/questions/topics/:id`, `PATCH /admin/questions/topics/:id` | `ADMIN`, `CENTER_MANAGER`               |
-| `POST /admin/questions/pool`                                                                                        | `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR` |
-
-Kong OSS trong repo đang dùng routing, CORS và rate-limiting. OIDC plugin không có sẵn trong image OSS; service-level Keycloak guard là điểm enforce auth hiện tại.
-
-Admin dashboard business API path là `/admin/questions/*`; Swagger/docs path là `/question-service/docs`. Không còn public route `/questions/*` cho frontend hoặc Kong.
+Question-service validate JWT/RBAC tại service bằng Keycloak guard. Frontend gọi qua Kong và gửi `Authorization: Bearer <access_token>`.
 
 ---
 
-## Gateway / Kong
+## Authentication
 
-Question-service đã có route trong `kong/kong.dev.yaml`:
-
-| Public path qua Kong                               | Upstream local service                       |
-| -------------------------------------------------- | -------------------------------------------- |
-| `http://localhost:8000/admin/questions`                  | `http://host.docker.internal:3005/admin/questions` |
-| `http://localhost:8000/question-service/docs`      | `http://host.docker.internal:3005/docs`      |
-| `http://localhost:8000/question-service/docs-json` | `http://host.docker.internal:3005/docs-json` |
-
-Khi test direct local, gọi `http://localhost:3005`. Khi test dùng kiến trúc gateway, gọi `http://localhost:8000/admin/questions`.
-
-```bash
-curl -s http://localhost:8000/admin/questions | jq .
-curl -s http://localhost:8000/question-service/docs-json | jq '.info.title'
-```
-
-Kong OSS trong repo đang dùng routing, CORS và rate-limiting. JWT/RBAC được enforce tại question-service bằng Keycloak guard.
+| Endpoint | Role |
+| --- | --- |
+| `POST /admin/questions/topics` | `ADMIN`, `CENTER_MANAGER` |
+| `GET /admin/questions/topics` | `ADMIN`, `CENTER_MANAGER` |
+| `GET /admin/questions/topics/:id` | `ADMIN`, `CENTER_MANAGER` |
+| `PATCH /admin/questions/topics/:id` | `ADMIN`, `CENTER_MANAGER` |
+| `POST /admin/questions` | `ADMIN`, `CENTER_MANAGER` |
+| `GET /admin/questions` | `ADMIN`, `CENTER_MANAGER` |
+| `GET /admin/questions/:id` | `ADMIN`, `CENTER_MANAGER` |
+| `PATCH /admin/questions/:id` | `ADMIN`, `CENTER_MANAGER` |
+| `DELETE /admin/questions/:id` | `ADMIN`, `CENTER_MANAGER` |
+| `POST /admin/questions/pool` | `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR` or exam-service service account |
 
 ---
 
 ## Response Format
+
+Tất cả HTTP success response được bọc bởi `ApiResponseInterceptor`.
 
 ```json
 {
@@ -65,9 +51,9 @@ Lỗi domain:
 {
   "success": false,
   "code": "QUESTION_NOT_FOUND",
-  "message": "Question not found: abc",
+  "message": "Question not found: question-uuid",
   "timestamp": "2026-05-14T10:00:00.000Z",
-  "path": "/admin/questions/abc"
+  "path": "/admin/questions/question-uuid"
 }
 ```
 
@@ -75,92 +61,40 @@ Lỗi domain:
 
 ## Error Codes
 
-| HTTP | Code                        | Nguyên nhân                                         |
-| ---: | --------------------------- | --------------------------------------------------- |
-|  400 | `VALIDATION_ERROR`          | Body/query không hợp lệ                             |
-|  400 | `INVALID_QUESTION`          | Vi phạm invariant của question/topic                |
-|  404 | `QUESTION_NOT_FOUND`        | Không tìm thấy question                             |
-|  404 | `QUESTION_TOPIC_NOT_FOUND`  | Không tìm thấy topic                                |
-|  409 | `QUESTION_DUPLICATE`        | Question cùng normalized content + topic đã tồn tại |
-|  409 | `QUESTION_VERSION_CONFLICT` | Optimistic concurrency conflict                     |
-|  422 | `QUESTION_ALREADY_DELETED`  | Thao tác trên question đã soft-delete               |
+| HTTP | Code | Nguyên nhân |
+| ---: | --- | --- |
+| 400 | `VALIDATION_ERROR`, `INVALID_QUESTION` | Body/query hoặc invariant không hợp lệ |
+| 404 | `QUESTION_NOT_FOUND` | Không tìm thấy question |
+| 404 | `QUESTION_TOPIC_NOT_FOUND` | Không tìm thấy topic |
+| 409 | `QUESTION_DUPLICATE` | Question trùng normalized content + topic |
+| 409 | `QUESTION_VERSION_CONFLICT` | Optimistic concurrency conflict |
+| 422 | `QUESTION_ALREADY_DELETED` | Thao tác trên question đã soft-delete |
 
 ---
 
 ## Enums
 
-### LicenseCategory
-
-`A1` | `A2` | `B1` | `B2` | `C` | `D` | `E` | `F`
-
-### QuestionType
-
-`THEORY` | `TRAFFIC_SIGN` | `SCENARIO_RELATED`
-
-### QuestionDifficulty
-
-`EASY` | `MEDIUM` | `HARD`
+`LicenseCategory`: `A1` | `A2` | `B1` | `B2` | `C` | `D` | `E` | `F`  
+`QuestionType`: `THEORY` | `TRAFFIC_SIGN` | `SCENARIO_RELATED`  
+`QuestionDifficulty`: `EASY` | `MEDIUM` | `HARD`
 
 ---
 
-## Shared Types
+## Image Contract
 
-### QuestionResponse
+Ảnh câu hỏi nên dùng `mediaFileId` để reference `media-service` FileObject. Frontend gọi `GET /media/files/:mediaFileId/url` để lấy presigned URL rồi render ảnh. `imageUrl` là URL blob ổn định/fallback, nhưng có thể không đọc trực tiếp được nếu Azure container private.
 
-Admin/detail response có `options[].isCorrect`. Field này phục vụ quản trị và endpoint nội bộ; các API client-facing của exam-service sau này phải loại bỏ đáp án đúng.
-
-Ảnh câu hỏi nên dùng `mediaFileId` để reference `media-service` FileObject. `imageUrl` chỉ là URL hiển thị/denormalized nếu client đã có URL trực tiếp; question-service không upload file và không quản lý Azure Blob.
-
-```json
-{
-  "id": "question-uuid",
-  "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
-  "type": "THEORY",
-  "licenseCategories": ["B2"],
-  "difficulty": "EASY",
-  "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
-  "imageUrl": null,
-  "mediaFileId": "media-file-uuid",
-  "isCritical": false,
-  "isActive": true,
-  "isDeleted": false,
-  "topicId": "topic-uuid",
-  "createdById": "admin-uuid",
-  "version": 1,
-  "deletedById": null,
-  "deletedAt": null,
-  "createdAt": "2026-05-14T10:00:00.000Z",
-  "updatedAt": "2026-05-14T10:00:00.000Z",
-  "options": [
-    {
-      "id": "option-uuid",
-      "content": "Dừng lại",
-      "isCorrect": true,
-      "displayOrder": 1
-    }
-  ]
-}
-```
-
-### TopicResponse
-
-```json
-{
-  "id": "topic-uuid",
-  "name": "Biển báo giao thông",
-  "description": "Nhóm câu hỏi về biển báo",
-  "parentId": null,
-  "createdAt": "2026-05-14T10:00:00.000Z"
-}
-```
+Nếu body create/update có `mediaFileId`, question-service publish event `question.image.linked`; media-service consume event này để mark file thành `LINKED`.
 
 ---
 
-## Endpoints - Topics
+## Topic Endpoints
 
 ### POST `/admin/questions/topics`
 
 Tạo topic mới.
+
+**Body**
 
 ```json
 {
@@ -170,19 +104,38 @@ Tạo topic mới.
 }
 ```
 
-**Response `201 Created`:** `data` là `TopicResponse`.
+**Response `201 Created`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Created",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/topics",
+  "data": {
+    "id": "topic-uuid",
+    "name": "Biển báo giao thông",
+    "description": "Nhóm câu hỏi về biển báo",
+    "parentId": null,
+    "createdAt": "2026-05-14T10:00:00.000Z"
+  }
+}
+```
+
+---
 
 ### GET `/admin/questions/topics`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
+List topic có phân trang.
 
-**Query details**
+**Query**
 
-| Param | Type | Default | Validation | Description |
-| --- | --- | ---: | --- | --- |
-| `page` | number | 1 | integer, `>= 1` | Page index. |
-| `size` | number | 20 | integer, `1..100` | Items per page. |
-| `parentId` | UUID | - | optional UUID | Filter child topics by parent topic. |
+| Param | Type | Default | Validation |
+| --- | --- | ---: | --- |
+| `page` | number | 1 | integer, `>= 1` |
+| `size` | number | 20 | integer, `1..100` |
+| `parentId` | UUID | - | optional UUID |
 
 **Response `200 OK`**
 
@@ -190,12 +143,15 @@ Tạo topic mới.
 {
   "success": true,
   "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/topics",
   "data": {
     "items": [
       {
         "id": "topic-uuid",
-        "name": "Bien bao giao thong",
-        "description": "Nhom cau hoi ve bien bao",
+        "name": "Biển báo giao thông",
+        "description": "Nhóm câu hỏi về biển báo",
         "parentId": null,
         "createdAt": "2026-05-14T10:00:00.000Z"
       }
@@ -207,68 +163,73 @@ Tạo topic mới.
 }
 ```
 
-List topic có phân trang.
-
-| Param      | Type   | Default |
-| ---------- | ------ | ------: |
-| `page`     | number |       1 |
-| `size`     | number |      20 |
-| `parentId` | UUID   |       - |
+---
 
 ### GET `/admin/questions/topics/:id`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
-
-**Path params**
-
-| Param | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | UUID | Yes | Topic id. |
-
-**Response `200 OK`:** `data` is `TopicResponse`.
-
-**Errors:** `QUESTION_TOPIC_NOT_FOUND`.
-
 Lấy chi tiết topic.
+
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/topics/topic-uuid",
+  "data": {
+    "id": "topic-uuid",
+    "name": "Biển báo giao thông",
+    "description": "Nhóm câu hỏi về biển báo",
+    "parentId": null,
+    "createdAt": "2026-05-14T10:00:00.000Z"
+  }
+}
+```
+
+---
 
 ### PATCH `/admin/questions/topics/:id`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
+Cập nhật `name`, `description`, hoặc `parentId`.
 
 **Body**
 
 ```json
 {
-  "name": "Bien bao cam",
-  "description": "Nhom cau hoi ve bien bao cam",
+  "name": "Biển báo cấm",
+  "description": "Nhóm câu hỏi về biển báo cấm",
   "parentId": "parent-topic-uuid"
 }
 ```
 
-| Field | Type | Required | Validation | Description |
-| --- | --- | --- | --- | --- |
-| `name` | string | No | non-empty when present | Topic display name. |
-| `description` | string | No | optional | Topic description. |
-| `parentId` | UUID/null | No | optional UUID/null | Parent topic id; use null for root topic. |
+**Response `200 OK`**
 
-**Response `200 OK`:** `data` is updated `TopicResponse`.
-
-Cập nhật `name`, `description`, hoặc `parentId`.
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/topics/topic-uuid",
+  "data": {
+    "id": "topic-uuid",
+    "name": "Biển báo cấm",
+    "description": "Nhóm câu hỏi về biển báo cấm",
+    "parentId": "parent-topic-uuid",
+    "createdAt": "2026-05-14T10:00:00.000Z"
+  }
+}
+```
 
 ---
 
-## Endpoints - Questions
+## Question Endpoints
 
 ### POST `/admin/questions`
 
 Tạo question mới. `createdById` lấy từ `sub` trong JWT của caller.
-
-**Headers**
-
-```http
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
 
 **Body**
 
@@ -291,45 +252,68 @@ Content-Type: application/json
 }
 ```
 
-Validation chính:
+**Response `201 Created`**
 
-| Field                    | Rule                                  |
-| ------------------------ | ------------------------------------- |
-| `content`                | required, max 2000 chars              |
-| `licenseCategories`      | 1..n enum values                      |
-| `options`                | 2..6 items                            |
-| `options[].content`      | required, max 500 chars               |
-| `options[].isCorrect`    | exactly one correct option            |
-| `options[].displayOrder` | positive integer, unique per question |
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Created",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions",
+  "data": {
+    "id": "question-uuid",
+    "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+    "type": "THEORY",
+    "licenseCategories": ["B2"],
+    "difficulty": "EASY",
+    "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
+    "imageUrl": null,
+    "mediaFileId": "media-file-uuid",
+    "isCritical": false,
+    "isActive": true,
+    "isDeleted": false,
+    "topicId": "topic-uuid",
+    "createdById": "admin-uuid",
+    "version": 1,
+    "deletedById": null,
+    "deletedAt": null,
+    "createdAt": "2026-05-14T10:00:00.000Z",
+    "updatedAt": "2026-05-14T10:00:00.000Z",
+    "options": [
+      {
+        "id": "option-uuid",
+        "content": "Dừng lại",
+        "isCorrect": true,
+        "displayOrder": 1
+      }
+    ]
+  }
+}
+```
 
-Nếu body có `mediaFileId`, question-service publish event `question.image.linked` sang `media-service` để mark file `LINKED`.
+**Event published:** `question.created`; nếu có `mediaFileId` thì publish thêm `question.image.linked`.
 
-**Response `201 Created`:** `data` là `QuestionResponse`.
-
-**Event published:** `question.created`.
-
-**Event published when `mediaFileId` is present:** `question.image.linked`.
-
-Media integration dùng event-driven pattern: question-service chỉ lưu UUID reference và publish `question.image.linked`; media-service consume event để mark FileObject thành `LINKED`. Question-service không gọi trực tiếp Azure Blob và không truy cập DB của media-service.
+---
 
 ### GET `/admin/questions`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
-
 Search question bank có filter và pagination.
 
-| Param             | Type               | Default |
-| ----------------- | ------------------ | ------: |
-| `page`            | number             |       1 |
-| `size`            | number             |      20 |
-| `keyword`         | string             |       - |
-| `licenseCategory` | LicenseCategory    |       - |
-| `type`            | QuestionType       |       - |
-| `difficulty`      | QuestionDifficulty |       - |
-| `topicId`         | UUID               |       - |
-| `isCritical`      | boolean            |       - |
-| `isActive`        | boolean            |       - |
-| `includeDeleted`  | boolean            |   false |
+**Query**
+
+| Param | Type | Default |
+| --- | --- | ---: |
+| `page` | number | 1 |
+| `size` | number | 20 |
+| `keyword` | string | - |
+| `licenseCategory` | LicenseCategory | - |
+| `type` | QuestionType | - |
+| `difficulty` | QuestionDifficulty | - |
+| `topicId` | UUID | - |
+| `isCritical` | boolean | - |
+| `isActive` | boolean | - |
+| `includeDeleted` | boolean | false |
 
 **Response `200 OK`**
 
@@ -337,44 +321,100 @@ Search question bank có filter và pagination.
 {
   "success": true,
   "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions",
   "data": {
-    "items": [],
-    "total": 0,
+    "items": [
+      {
+        "id": "question-uuid",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "type": "THEORY",
+        "licenseCategories": ["B2"],
+        "difficulty": "EASY",
+        "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
+        "isCritical": false,
+        "isActive": true,
+        "isDeleted": false,
+        "topicId": "topic-uuid",
+        "createdById": "admin-uuid",
+        "version": 1,
+        "deletedById": null,
+        "deletedAt": null,
+        "createdAt": "2026-05-14T10:00:00.000Z",
+        "updatedAt": "2026-05-14T10:00:00.000Z",
+        "options": [
+          {
+            "id": "option-uuid",
+            "content": "Dừng lại",
+            "isCorrect": true,
+            "displayOrder": 1
+          }
+        ]
+      }
+    ],
+    "total": 1,
     "page": 1,
     "size": 20
   }
 }
 ```
 
+---
+
 ### GET `/admin/questions/:id`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
+Lấy chi tiết question. Response có `options[].isCorrect`; chỉ dùng cho admin/internal, không expose trực tiếp cho student.
 
-**Path params**
+**Response `200 OK`**
 
-| Param | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | UUID | Yes | Question id. |
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/question-uuid",
+  "data": {
+    "id": "question-uuid",
+    "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+    "type": "THEORY",
+    "licenseCategories": ["B2"],
+    "difficulty": "EASY",
+    "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
+    "imageUrl": null,
+    "mediaFileId": "media-file-uuid",
+    "isCritical": false,
+    "isActive": true,
+    "isDeleted": false,
+    "topicId": "topic-uuid",
+    "createdById": "admin-uuid",
+    "version": 1,
+    "deletedById": null,
+    "deletedAt": null,
+    "createdAt": "2026-05-14T10:00:00.000Z",
+    "updatedAt": "2026-05-14T10:00:00.000Z",
+    "options": [
+      {
+        "id": "option-uuid",
+        "content": "Dừng lại",
+        "isCorrect": true,
+        "displayOrder": 1
+      }
+    ]
+  }
+}
+```
 
-**Response `200 OK`:** `data` is `QuestionResponse`.
-
-Frontend/admin note: this endpoint is safe for question management screens only. It includes `options[].isCorrect`; do not expose this response to students.
-
-**Errors:** `QUESTION_NOT_FOUND`.
-
-Lấy chi tiết question. Response có `options[].isCorrect`.
+---
 
 ### PATCH `/admin/questions/:id`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
-
-**Path params**
-
-| Param | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | UUID | Yes | Question id. |
-
 Cập nhật question. Bắt buộc gửi `version`.
+
+**Body**
 
 ```json
 {
@@ -384,54 +424,111 @@ Cập nhật question. Bắt buộc gửi `version`.
 }
 ```
 
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/question-uuid",
+  "data": {
+    "id": "question-uuid",
+    "content": "Nội dung mới",
+    "type": "THEORY",
+    "licenseCategories": ["B2"],
+    "difficulty": "EASY",
+    "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
+    "imageUrl": null,
+    "mediaFileId": "media-file-uuid",
+    "isCritical": false,
+    "isActive": false,
+    "isDeleted": false,
+    "topicId": "topic-uuid",
+    "createdById": "admin-uuid",
+    "version": 2,
+    "deletedById": null,
+    "deletedAt": null,
+    "createdAt": "2026-05-14T10:00:00.000Z",
+    "updatedAt": "2026-05-14T10:05:00.000Z",
+    "options": [
+      {
+        "id": "option-uuid",
+        "content": "Dừng lại",
+        "isCorrect": true,
+        "displayOrder": 1
+      }
+    ]
+  }
+}
+```
+
 Nếu `version` không khớp, response `409 QUESTION_VERSION_CONFLICT`. Nếu `isActive` chuyển từ `true` sang `false`, publish `question.deactivated`.
 
-Common update fields:
-
-| Field | Type | Required | Validation | Description |
-| --- | --- | --- | --- | --- |
-| `version` | number | Yes | integer | Current version from latest question response. |
-| `content` | string | No | max 2000 chars | Question text. |
-| `type` | QuestionType | No | enum | Question category/type. |
-| `licenseCategories` | LicenseCategory[] | No | non-empty enum array | License tiers this question applies to. |
-| `difficulty` | QuestionDifficulty | No | enum | Difficulty filter/display value. |
-| `explanation` | string | No | optional | Explanation for admins/internal use. |
-| `imageUrl` | string/null | No | optional URL/null | Display URL if already available. |
-| `mediaFileId` | UUID/null | No | optional UUID/null | Reference to media-service file metadata. |
-| `isCritical` | boolean | No | boolean | Critical question flag. |
-| `isActive` | boolean | No | boolean | Active question can be used in pools. |
-| `topicId` | UUID | No | UUID | Topic id. |
-| `options` | array | No | 2..6 items | Replacement option set; exactly one option must be correct. |
-
-**Response `200 OK`:** `data` is updated `QuestionResponse`.
+---
 
 ### DELETE `/admin/questions/:id`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`
-
-**Path params**
-
-| Param | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | UUID | Yes | Question id. |
-
 Soft delete question. `deletedById` lấy từ `sub` trong JWT của caller.
 
+**Body**
+
 ```json
-{ "version": 2 }
+{
+  "version": 2
+}
 ```
 
-Response `200 OK`: `QuestionResponse` với `isDeleted=true`, `isActive=false`.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/question-uuid",
+  "data": {
+    "id": "question-uuid",
+    "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+    "type": "THEORY",
+    "licenseCategories": ["B2"],
+    "difficulty": "EASY",
+    "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
+    "imageUrl": null,
+    "mediaFileId": "media-file-uuid",
+    "isCritical": false,
+    "isActive": false,
+    "isDeleted": true,
+    "topicId": "topic-uuid",
+    "createdById": "admin-uuid",
+    "version": 3,
+    "deletedById": "admin-uuid",
+    "deletedAt": "2026-05-14T10:10:00.000Z",
+    "createdAt": "2026-05-14T10:00:00.000Z",
+    "updatedAt": "2026-05-14T10:10:00.000Z",
+    "options": [
+      {
+        "id": "option-uuid",
+        "content": "Dừng lại",
+        "isCorrect": true,
+        "displayOrder": 1
+      }
+    ]
+  }
+}
+```
 
 **Event published:** `question.deactivated`.
 
+---
+
 ### POST `/admin/questions/pool`
 
-**Auth:** `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR` or service-account token used by exam-service.
+Endpoint nội bộ cho exam-service lấy question pool active và chưa soft-delete. Student clients không gọi endpoint này.
 
-Frontend note: student clients must not call this endpoint. Use `GET /exams/available` and `POST /exams/sessions` instead.
-
-Endpoint nội bộ cho exam-service lấy question pool active và chưa soft-delete.
+**Body**
 
 ```json
 {
@@ -445,40 +542,51 @@ Endpoint nội bộ cho exam-service lấy question pool active và chưa soft-d
 }
 ```
 
-Request fields:
-
-| Field | Type | Required | Validation | Description |
-| --- | --- | --- | --- | --- |
-| `licenseCategory` | LicenseCategory | Yes | enum | Required license tier. |
-| `size` | number | Yes | integer, `>= 1` | Number of questions requested. |
-| `type` | QuestionType | No | enum | Optional type filter. |
-| `difficulty` | QuestionDifficulty | No | enum | Optional difficulty filter. |
-| `topicId` | UUID | No | UUID | Optional topic filter. |
-| `isCritical` | boolean | No | boolean | Optional critical filter. |
-| `excludeQuestionIds` | UUID[] | No | optional array | Questions to exclude from pool. |
-
-Response:
+**Response `201 Created`**
 
 ```json
 {
-  "items": [
-    {
-      "id": "question-uuid",
-      "content": "...",
-      "options": [
-        {
-          "id": "option-uuid",
-          "content": "...",
-          "isCorrect": true,
-          "displayOrder": 1
-        }
-      ]
-    }
-  ]
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Created",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/questions/pool",
+  "data": {
+    "items": [
+      {
+        "id": "question-uuid",
+        "content": "Khi gặp đèn đỏ, người lái xe phải làm gì?",
+        "type": "THEORY",
+        "licenseCategories": ["B2"],
+        "difficulty": "EASY",
+        "explanation": "Đèn đỏ yêu cầu dừng lại trước vạch dừng.",
+        "imageUrl": null,
+        "mediaFileId": "media-file-uuid",
+        "isCritical": false,
+        "isActive": true,
+        "isDeleted": false,
+        "topicId": "topic-uuid",
+        "createdById": "admin-uuid",
+        "version": 1,
+        "deletedById": null,
+        "deletedAt": null,
+        "createdAt": "2026-05-14T10:00:00.000Z",
+        "updatedAt": "2026-05-14T10:00:00.000Z",
+        "options": [
+          {
+            "id": "option-uuid",
+            "content": "Dừng lại",
+            "isCorrect": true,
+            "displayOrder": 1
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
-Note: pool response có đáp án đúng để exam-service snapshot/grade nội bộ. Không expose response này trực tiếp cho student client.
+Pool response có đáp án đúng để exam-service snapshot/grade nội bộ. Không expose response này trực tiếp cho student client.
 
 ---
 

@@ -15,6 +15,8 @@ export class ExamSessionQuestion extends Entity<string> {
     id: string,
     readonly questionId: string,
     readonly questionContent: string,
+    readonly imageUrl: string | null,
+    readonly mediaFileId: string | null,
     readonly optionsSnapshot: ExamQuestionOptionSnapshot[],
     readonly correctOptionId: string,
     readonly isCritical: boolean,
@@ -37,6 +39,8 @@ export class ExamSessionQuestion extends Entity<string> {
       props.id ?? crypto.randomUUID(),
       props.questionId,
       props.questionContent.trim(),
+      props.imageUrl ?? null,
+      props.mediaFileId ?? null,
       [...props.optionsSnapshot].sort(
         (a, b) => a.displayOrder - b.displayOrder,
       ),

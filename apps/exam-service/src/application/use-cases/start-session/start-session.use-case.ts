@@ -84,6 +84,8 @@ export class StartSessionUseCase
           return {
             questionId: question.id,
             questionContent: question.content,
+            imageUrl: question.imageUrl,
+            mediaFileId: question.mediaFileId,
             optionsSnapshot: question.options.map((option) => ({
               id: option.id,
               content: option.content,
