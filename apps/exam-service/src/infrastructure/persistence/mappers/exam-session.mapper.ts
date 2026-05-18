@@ -15,6 +15,8 @@ interface RawSessionQuestion {
   id: string;
   questionId: string;
   questionContent: string;
+  imageUrl: string | null;
+  mediaFileId: string | null;
   optionsSnapshot: unknown;
   correctOptionId: string;
   isCritical: boolean;
@@ -64,6 +66,8 @@ export class ExamSessionMapper {
         id: question.id,
         questionId: question.questionId,
         questionContent: question.questionContent,
+        imageUrl: question.imageUrl,
+        mediaFileId: question.mediaFileId,
         optionsSnapshot:
           question.optionsSnapshot as ExamQuestionOptionSnapshot[],
         correctOptionId: question.correctOptionId,

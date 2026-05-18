@@ -136,6 +136,8 @@ describe('Exam use cases', () => {
       {
         id: 'q1',
         content: 'Question 1',
+        imageUrl: null,
+        mediaFileId: null,
         isCritical: false,
         options: [
           { id: 'q1-o1', content: 'A', isCorrect: true, displayOrder: 1 },
@@ -145,6 +147,8 @@ describe('Exam use cases', () => {
       {
         id: 'q2',
         content: 'Question 2',
+        imageUrl: null,
+        mediaFileId: null,
         isCritical: true,
         options: [
           { id: 'q2-o1', content: 'A', isCorrect: true, displayOrder: 1 },

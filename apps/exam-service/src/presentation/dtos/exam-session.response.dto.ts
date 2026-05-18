@@ -25,6 +25,8 @@ export class ExamQuestionOptionResponseDto {
 export class ExamSessionQuestionResponseDto {
   @ApiProperty() questionId: string;
   @ApiProperty() content: string;
+  @ApiPropertyOptional({ nullable: true }) imageUrl: string | null;
+  @ApiPropertyOptional({ nullable: true }) mediaFileId: string | null;
   @ApiProperty({ type: [ExamQuestionOptionResponseDto] })
   options: ExamQuestionOptionResponseDto[];
   @ApiProperty() displayOrder: number;
@@ -38,6 +40,8 @@ export class ExamSessionQuestionResponseDto {
     const dto = new ExamSessionQuestionResponseDto();
     dto.questionId = result.questionId;
     dto.content = result.content;
+    dto.imageUrl = result.imageUrl;
+    dto.mediaFileId = result.mediaFileId;
     dto.options = result.options.map(ExamQuestionOptionResponseDto.fromResult);
     dto.displayOrder = result.displayOrder;
     dto.isCritical = result.isCritical;

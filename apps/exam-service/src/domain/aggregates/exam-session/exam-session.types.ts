@@ -17,6 +17,8 @@ export interface ExamQuestionSnapshot {
   id?: string;
   questionId: string;
   questionContent: string;
+  imageUrl?: string | null;
+  mediaFileId?: string | null;
   optionsSnapshot: ExamQuestionOptionSnapshot[];
   correctOptionId: string;
   isCritical: boolean;

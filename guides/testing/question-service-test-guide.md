@@ -59,7 +59,58 @@ cd apps/question-service
 npm run db:deploy
 ```
 
-### 1.3 Start question-service
+### 1.3 Seed question topics and questions
+
+Seed 6 topic gốc và toàn bộ 600 câu hỏi từ `seed/600-cau-hoi.docx`:
+
+```bash
+cd apps/question-service
+npm run db:seed
+```
+
+Hoặc chạy từ root:
+
+```bash
+npm run db:seed:question
+```
+
+Khi nhiều service có seed riêng, chạy toàn bộ seed từ root:
+
+```bash
+npm run db:seed
+```
+
+Seed này idempotent, có thể chạy lại nhiều lần mà không tạo trùng topic/question/option.
+Các câu có hình vẫn được seed phần text và đáp án; chạy seed ảnh ở bước kế tiếp để upload Azure và link `imageUrl`/`mediaFileId`.
+
+Seed ảnh nhúng từ DOCX lên Azure Blob Storage và link vào question:
+
+```bash
+npm run db:seed:question-images
+```
+
+Seed ảnh cần config `media-service` trong Consul: `storage.accountName`, `storage.accountKey`, `storage.containerName`, cùng database URL của `question-service` và `media-service`. Frontend nên dùng `mediaFileId` để gọi `GET /media/files/:id/url` lấy presigned URL rồi render ảnh.
+
+Kiểm tra nhanh sau khi start service:
+
+```bash
+curl -s "http://localhost:3005/admin/questions/topics?page=1&size=20" | jq '.data | {total, topics: [.items[] | {name, description}]}'
+curl -s "http://localhost:3005/admin/questions?page=1&size=1" | jq '.data.total'
+curl -s "http://localhost:3005/admin/questions?type=TRAFFIC_SIGN&page=1&size=5" | jq '.data.items[] | {id, imageUrl, mediaFileId}'
+```
+
+Expect có 6 topic gốc:
+
+- Quy định chung và quy tắc giao thông đường bộ
+- Văn hóa giao thông, đạo đức người lái xe, kỹ năng PCCC và cứu hộ cứu nạn
+- Kỹ thuật lái xe
+- Cấu tạo và sửa chữa
+- Báo hiệu đường bộ
+- Giải thế sa hình và kỹ năng xử lý tình huống giao thông
+
+Expect question total là `600`.
+
+### 1.4 Start question-service
 
 ```bash
 npm run dev --filter=question-service

@@ -96,7 +96,7 @@ model CourseMaterial {
   courseId  String
   title     String   @db.Text
   fileUrl     String?
-  mediaFileId String?   @map("media_file_id")
+  mediaFileId String?
   type        String?
   createdAt DateTime @default(now())
 

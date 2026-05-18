@@ -79,9 +79,9 @@ Lỗi domain được trả theo format:
 
 ## Shared Types
 
-### FileObjectResponse
+### File Metadata Fields
 
-Response DTO hiện tại **không trả `status`**, dù domain vẫn có `FileStatus`.
+Response hiện tại **không trả `status`**, dù domain vẫn có `FileStatus`.
 
 ```json
 {
@@ -125,6 +125,8 @@ Upload file bằng `multipart/form-data`. `uploadedById` lấy từ `sub` trong 
   "success": true,
   "code": "SUCCESS",
   "message": "Created",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/media/files",
   "data": {
     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     "storageKey": "uploads/2026/05/3fa85f64-5717-4562-b3fc-2c963f66afa6.jpg",
@@ -170,6 +172,8 @@ Tạo metadata và SAS URL để client upload trực tiếp lên Azure Blob Sto
   "success": true,
   "code": "SUCCESS",
   "message": "Created",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/media/files/init",
   "data": {
     "mediaFileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     "uploadUrl": "https://storage.blob.core.windows.net/media/uploads/2026/05/file.jpg?sv=...",
@@ -214,9 +218,24 @@ Liệt kê metadata file.
 {
   "success": true,
   "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/admin/media/files",
   "data": {
-    "items": [],
-    "total": 0,
+    "items": [
+      {
+        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "storageKey": "uploads/2026/05/3fa85f64-5717-4562-b3fc-2c963f66afa6.jpg",
+        "originalName": "avatar.jpg",
+        "mimeType": "image/jpeg",
+        "fileSize": 204800,
+        "bucketName": "media",
+        "uploadedById": "keycloak-user-uuid",
+        "isPublic": false,
+        "createdAt": "2026-05-14T10:00:00.000Z"
+      }
+    ],
+    "total": 1,
     "page": 1,
     "size": 20
   }
@@ -237,7 +256,28 @@ Liệt kê metadata file.
 
 Lấy metadata theo file id.
 
-**Response `200 OK`:** `data` là `FileObjectResponse`.
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/media/files/3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "data": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "storageKey": "uploads/2026/05/3fa85f64-5717-4562-b3fc-2c963f66afa6.jpg",
+    "originalName": "avatar.jpg",
+    "mimeType": "image/jpeg",
+    "fileSize": 204800,
+    "bucketName": "media",
+    "uploadedById": "keycloak-user-uuid",
+    "isPublic": false,
+    "createdAt": "2026-05-14T10:00:00.000Z"
+  }
+}
+```
 
 ---
 
@@ -259,6 +299,9 @@ Tạo presigned download URL.
 {
   "success": true,
   "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "path": "/media/files/3fa85f64-5717-4562-b3fc-2c963f66afa6/url",
   "data": {
     "url": "https://storage.blob.core.windows.net/media/uploads/2026/05/file.jpg?sv=...",
     "expiresAt": "2026-05-14T11:00:00.000Z"

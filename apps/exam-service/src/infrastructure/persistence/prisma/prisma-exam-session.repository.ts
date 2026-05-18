@@ -87,6 +87,8 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
             sessionId: session.id,
             questionId: question.questionId,
             questionContent: question.questionContent,
+            imageUrl: question.imageUrl,
+            mediaFileId: question.mediaFileId,
             optionsSnapshot:
               question.optionsSnapshot as unknown as Prisma.InputJsonValue,
             correctOptionId: question.correctOptionId,

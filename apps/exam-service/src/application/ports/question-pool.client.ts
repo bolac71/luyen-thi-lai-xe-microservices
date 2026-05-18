@@ -10,6 +10,8 @@ export interface QuestionPoolOption {
 export interface QuestionPoolItem {
   id: string;
   content: string;
+  imageUrl: string | null;
+  mediaFileId: string | null;
   isCritical: boolean;
   options: QuestionPoolOption[];
 }

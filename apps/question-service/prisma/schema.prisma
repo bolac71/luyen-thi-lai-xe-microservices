@@ -53,7 +53,7 @@ model Question {
   difficulty        QuestionDifficulty
   explanation       String             @db.Text
   imageUrl          String?
-  mediaFileId       String?            @map("media_file_id")
+  mediaFileId       String?
   isCritical        Boolean            @default(false)
   isActive          Boolean            @default(true)
   isDeleted         Boolean            @default(false)

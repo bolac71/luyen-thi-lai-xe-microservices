@@ -11,6 +11,8 @@ export interface ExamQuestionOptionResult {
 export interface ExamSessionQuestionResult {
   questionId: string;
   content: string;
+  imageUrl: string | null;
+  mediaFileId: string | null;
   options: ExamQuestionOptionResult[];
   displayOrder: number;
   isCritical: boolean;
@@ -54,6 +56,8 @@ export class ExamSessionResult {
       session.questions.map((question) => ({
         questionId: question.questionId,
         content: question.questionContent,
+        imageUrl: question.imageUrl,
+        mediaFileId: question.mediaFileId,
         options: question.optionsSnapshot.map((option) => ({
           id: option.id,
           content: option.content,
