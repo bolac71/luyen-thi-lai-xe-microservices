@@ -7,35 +7,35 @@ export class InvalidExamTemplateException extends DomainException {
 export class ExamTemplateNotFoundException extends DomainException {
   readonly code = 'EXAM_TEMPLATE_NOT_FOUND';
   constructor(id: string) {
-    super(`Không tìm thấy đề thi mẫu: ${id}`);
+    super(`Cannot find exam template with id ${id}`);
   }
 }
 
 export class ExamTemplateInactiveException extends DomainException {
   readonly code = 'EXAM_TEMPLATE_INACTIVE';
   constructor(id: string) {
-    super(`Đề thi mẫu không khả dụng: ${id}`);
+    super(`Exam template is inactive: ${id}`);
   }
 }
 
 export class ExamTemplateAlreadyDeletedException extends DomainException {
   readonly code = 'EXAM_TEMPLATE_ALREADY_DELETED';
   constructor(id: string) {
-    super(`Đề thi mẫu đã bị xóa: ${id}`);
+    super(`Exam template has already been deleted: ${id}`);
   }
 }
 
 export class ExamTemplateVersionConflictException extends DomainException {
   readonly code = 'EXAM_TEMPLATE_VERSION_CONFLICT';
   constructor(id: string) {
-    super(`Xung đột phiên bản đề thi mẫu: ${id}`);
+    super(`Version conflict in exam template: ${id}`);
   }
 }
 
 export class ExamTemplateInUseException extends DomainException {
   readonly code = 'EXAM_TEMPLATE_IN_USE';
   constructor(id: string) {
-    super(`Đề thi mẫu đang được sử dụng bởi các phiên thi: ${id}`);
+    super(`Exam template is in use by exam sessions: ${id}`);
   }
 }
 
@@ -46,21 +46,21 @@ export class InvalidExamSessionException extends DomainException {
 export class ExamSessionNotFoundException extends DomainException {
   readonly code = 'EXAM_SESSION_NOT_FOUND';
   constructor(id: string) {
-    super(`Không tìm thấy phiên thi: ${id}`);
+    super(`Cannot find exam session with id ${id}`);
   }
 }
 
 export class ExamSessionQuestionNotFoundException extends DomainException {
   readonly code = 'EXAM_SESSION_QUESTION_NOT_FOUND';
   constructor(questionId: string) {
-    super(`Không tìm thấy câu hỏi trong phiên thi: ${questionId}`);
+    super(`Cannot find question in exam session with id ${questionId}`);
   }
 }
 
 export class ExamSessionAlreadyFinishedException extends DomainException {
   readonly code = 'EXAM_SESSION_ALREADY_FINISHED';
   constructor(id: string) {
-    super(`Phiên thi đã kết thúc: ${id}`);
+    super(`Exam session has already finished: ${id}`);
   }
 }
 

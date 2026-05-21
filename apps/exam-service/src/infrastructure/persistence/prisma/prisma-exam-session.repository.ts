@@ -80,28 +80,28 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
         },
       });
 
-      await tx.examSessionQuestion.deleteMany({
-        where: { sessionId: session.id },
-      });
-      if (session.questions.length > 0) {
-        await tx.examSessionQuestion.createMany({
-          data: session.questions.map((question) => ({
-            id: question.id,
-            sessionId: session.id,
-            questionId: question.questionId,
-            questionContent: question.questionContent,
-            imageUrl: question.imageUrl,
-            mediaFileId: question.mediaFileId,
-            optionsSnapshot:
-              question.optionsSnapshot as unknown as Prisma.InputJsonValue,
-            correctOptionId: question.correctOptionId,
-            isCritical: question.isCritical,
-            displayOrder: question.displayOrder,
-            selectedOptionId: question.selectedOptionId,
-            isCorrect: question.isCorrect,
-            isBookmarked: question.isBookmarked,
-            answeredAt: question.answeredAt,
-          })),
+      for (const question of session.questions) {
+        const questionData = {
+          sessionId: session.id,
+          questionId: question.questionId,
+          questionContent: question.questionContent,
+          imageUrl: question.imageUrl,
+          mediaFileId: question.mediaFileId,
+          optionsSnapshot:
+            question.optionsSnapshot as unknown as Prisma.InputJsonValue,
+          correctOptionId: question.correctOptionId,
+          isCritical: question.isCritical,
+          displayOrder: question.displayOrder,
+          selectedOptionId: question.selectedOptionId,
+          isCorrect: question.isCorrect,
+          isBookmarked: question.isBookmarked,
+          answeredAt: question.answeredAt,
+        };
+
+        await tx.examSessionQuestion.upsert({
+          where: { id: question.id },
+          create: { id: question.id, ...questionData },
+          update: questionData,
         });
       }
     });

@@ -69,7 +69,10 @@ model Question {
   options QuestionOption[]
 
   @@index([topicId])
+  @@index([topicId, isActive, isDeleted])
   @@index([isActive, isDeleted])
+  @@index([createdAt])
+  @@index([licenseCategories], type: Gin)
   @@map("questions")
 }
 

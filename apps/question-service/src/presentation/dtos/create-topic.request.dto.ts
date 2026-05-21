@@ -14,6 +14,6 @@ export class CreateTopicRequestDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID(undefined)
   parentId?: string | null;
 }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IUseCase } from '@repo/common';
 import { CourseNotFoundException } from '../../../domain/exceptions/course-not-found.exception';
 import { CourseRepository } from '../../../domain/repositories/course.repository';
+import { CourseCachePort } from '../../ports/course-cache.port';
 import { CourseResult } from '../shared/course.result';
 import { UpdateCourseCommand } from './update-course.command';
 
@@ -9,7 +10,10 @@ import { UpdateCourseCommand } from './update-course.command';
 export class UpdateCourseUseCase
   implements IUseCase<UpdateCourseCommand, CourseResult>
 {
-  constructor(private readonly courseRepository: CourseRepository) {}
+  constructor(
+    private readonly courseRepository: CourseRepository,
+    private readonly courseCache: CourseCachePort,
+  ) {}
 
   async execute(command: UpdateCourseCommand): Promise<CourseResult> {
     const course = await this.courseRepository.findById(command.courseId);
@@ -28,6 +32,7 @@ export class UpdateCourseUseCase
     }
 
     await this.courseRepository.save(course);
+    await this.courseCache.invalidateCourse(course.id);
     return CourseResult.fromAggregate(course);
   }
 }

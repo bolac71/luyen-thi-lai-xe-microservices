@@ -50,6 +50,8 @@ model Course {
   materials   CourseMaterial[]
   enrollments CourseEnrollment[]
 
+  @@index([licenseCategory, status, createdAt])
+  @@index([createdById, createdAt])
   @@map("courses")
 }
 
@@ -117,5 +119,15 @@ model CourseEnrollment {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([courseId, studentId])
+  @@index([studentId, status])
   @@map("course_enrollments")
+}
+
+model StudentLicenseProfile {
+  studentId   String          @id
+  licenseTier LicenseCategory
+  syncedAt    DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("student_license_profiles")
 }

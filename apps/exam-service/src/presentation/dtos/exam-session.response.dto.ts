@@ -30,7 +30,6 @@ export class ExamSessionQuestionResponseDto {
   @ApiProperty({ type: [ExamQuestionOptionResponseDto] })
   options: ExamQuestionOptionResponseDto[];
   @ApiProperty() displayOrder: number;
-  @ApiProperty() isCritical: boolean;
   @ApiProperty() isBookmarked: boolean;
   @ApiPropertyOptional({ nullable: true }) selectedOptionId: string | null;
 
@@ -44,7 +43,6 @@ export class ExamSessionQuestionResponseDto {
     dto.mediaFileId = result.mediaFileId;
     dto.options = result.options.map(ExamQuestionOptionResponseDto.fromResult);
     dto.displayOrder = result.displayOrder;
-    dto.isCritical = result.isCritical;
     dto.isBookmarked = result.isBookmarked;
     dto.selectedOptionId = result.selectedOptionId;
     return dto;

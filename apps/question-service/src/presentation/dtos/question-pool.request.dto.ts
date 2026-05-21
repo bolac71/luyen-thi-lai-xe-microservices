@@ -4,10 +4,11 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
-  IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
 import {
@@ -23,8 +24,9 @@ export class QuestionPoolRequestDto {
 
   @ApiProperty({ example: 25 })
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
+  @Max(100)
   size: number;
 
   @ApiPropertyOptional({ enum: QuestionType })
@@ -50,6 +52,6 @@ export class QuestionPoolRequestDto {
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
+  @IsUUID(undefined, { each: true })
   excludeQuestionIds?: string[];
 }

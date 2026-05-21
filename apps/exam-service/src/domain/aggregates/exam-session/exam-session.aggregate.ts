@@ -128,6 +128,13 @@ export class ExamSession extends AggregateRoot<string> {
     this.touch();
   }
 
+  expireIfNeeded(now = new Date()): boolean {
+    if (this._status !== ExamSessionStatus.IN_PROGRESS) return false;
+    if (now <= this._expiresAt) return false;
+    this.grade(ExamSessionStatus.TIMED_OUT, now);
+    return true;
+  }
+
   submit(now = new Date()): void {
     this.assertInProgress();
     if (now > this._expiresAt) {

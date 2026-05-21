@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import Redis from 'ioredis';
+import { CourseCachePort } from './application/ports/course-cache.port';
 import { EventPublisher } from './application/ports/event-publisher.port';
 import { ActivateCourseUseCase } from './application/use-cases/activate-course/activate-course.use-case';
 import { AddCourseMaterialUseCase } from './application/use-cases/add-course-material/add-course-material.use-case';
@@ -13,10 +15,16 @@ import { GetEnrollmentUseCase } from './application/use-cases/get-enrollment/get
 import { ListCoursesUseCase } from './application/use-cases/list-courses/list-courses.use-case';
 import { ListStudentEnrollmentsUseCase } from './application/use-cases/list-student-enrollments/list-student-enrollments.use-case';
 import { RemoveLessonUseCase } from './application/use-cases/remove-lesson/remove-lesson.use-case';
+import { SyncStudentLicenseUseCase } from './application/use-cases/sync-student-license/sync-student-license.use-case';
 import { UpdateCourseUseCase } from './application/use-cases/update-course/update-course.use-case';
 import { CourseEnrollmentRepository } from './domain/repositories/course-enrollment.repository';
 import { CourseRepository } from './domain/repositories/course.repository';
+import { StudentLicenseProfileRepository } from './domain/repositories/student-license-profile.repository';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
+import {
+  REDIS_CLIENT,
+  RedisCourseCacheService,
+} from './infrastructure/cache/redis-course-cache.service';
 import {
   MEDIA_SERVICE_CLIENT,
   RABBITMQ_CLIENT,
@@ -25,6 +33,7 @@ import {
 import { PrismaCourseEnrollmentRepository } from './infrastructure/persistence/prisma/prisma-course-enrollment.repository';
 import { PrismaCourseRepository } from './infrastructure/persistence/prisma/prisma-course.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
+import { PrismaStudentLicenseProfileRepository } from './infrastructure/persistence/prisma/prisma-student-license-profile.repository';
 import { AdminCourseController } from './presentation/http/admin-course.controller';
 import { CourseController } from './presentation/http/course.controller';
 import { EnrollmentController } from './presentation/http/enrollment.controller';
@@ -73,6 +82,22 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     // Infrastructure
     PrismaService,
     DomainExceptionFilter,
+    {
+      provide: REDIS_CLIENT,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const redis = new Redis(
+          configService.get<string>('redis.url') ?? 'redis://127.0.0.1:6379',
+          {
+            enableOfflineQueue: false,
+            maxRetriesPerRequest: 1,
+            lazyConnect: true,
+          },
+        );
+        redis.on('error', () => undefined);
+        return redis;
+      },
+    },
 
     // Repository bindings
     { provide: CourseRepository, useClass: PrismaCourseRepository },
@@ -80,9 +105,14 @@ import { MessagingController } from './presentation/messaging/messaging.controll
       provide: CourseEnrollmentRepository,
       useClass: PrismaCourseEnrollmentRepository,
     },
+    {
+      provide: StudentLicenseProfileRepository,
+      useClass: PrismaStudentLicenseProfileRepository,
+    },
 
     // EventPublisher binding
     { provide: EventPublisher, useClass: RabbitMqEventPublisher },
+    { provide: CourseCachePort, useClass: RedisCourseCacheService },
 
     // Course use cases
     CreateCourseUseCase,
@@ -99,6 +129,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     CompleteLessonUseCase,
     GetEnrollmentUseCase,
     ListStudentEnrollmentsUseCase,
+    SyncStudentLicenseUseCase,
   ],
 })
 export class CourseModule {}

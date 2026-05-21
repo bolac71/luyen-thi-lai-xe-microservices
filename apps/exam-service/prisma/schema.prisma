@@ -71,6 +71,8 @@ model ExamSession {
   questions ExamSessionQuestion[]
 
   @@index([studentId, status])
+  @@index([studentId, startedAt])
+  @@index([studentId, isPassed, startedAt])
   @@index([templateId])
   @@map("exam_sessions")
 }

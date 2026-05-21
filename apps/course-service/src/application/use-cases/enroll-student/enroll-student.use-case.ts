@@ -6,12 +6,16 @@ import { CourseCapacityExceededException } from '../../../domain/exceptions/cour
 import { CourseNotFoundException } from '../../../domain/exceptions/course-not-found.exception';
 import { CourseNotActiveException } from '../../../domain/exceptions/course-not-active.exception';
 import { EnrollmentAlreadyExistsException } from '../../../domain/exceptions/enrollment-already-exists.exception';
+import { StudentLicenseMismatchException } from '../../../domain/exceptions/student-license-mismatch.exception';
+import { StudentLicenseNotAssignedException } from '../../../domain/exceptions/student-license-not-assigned.exception';
 import { CourseEnrollmentRepository } from '../../../domain/repositories/course-enrollment.repository';
 import { CourseRepository } from '../../../domain/repositories/course.repository';
+import { StudentLicenseProfileRepository } from '../../../domain/repositories/student-license-profile.repository';
 import { EventPublisher } from '../../ports/event-publisher.port';
 import { CourseEnrollmentCreatedEvent } from '../../../domain/events/course-enrollment-created.event';
 import { EnrollmentResult } from '../shared/enrollment.result';
 import { EnrollStudentCommand } from './enroll-student.command';
+import { CourseCachePort } from '../../ports/course-cache.port';
 
 @Injectable()
 export class EnrollStudentUseCase
@@ -20,7 +24,9 @@ export class EnrollStudentUseCase
   constructor(
     private readonly courseRepository: CourseRepository,
     private readonly enrollmentRepository: CourseEnrollmentRepository,
+    private readonly studentLicenseProfileRepository: StudentLicenseProfileRepository,
     private readonly eventPublisher: EventPublisher,
+    private readonly courseCache: CourseCachePort,
   ) {}
 
   async execute(command: EnrollStudentCommand): Promise<EnrollmentResult> {
@@ -41,6 +47,21 @@ export class EnrollStudentUseCase
         command.courseId,
       );
 
+    const studentLicense =
+      await this.studentLicenseProfileRepository.findByStudentId(
+        command.studentId,
+      );
+    if (!studentLicense) {
+      throw new StudentLicenseNotAssignedException(command.studentId);
+    }
+    if (studentLicense.licenseTier !== course.licenseCategory) {
+      throw new StudentLicenseMismatchException(
+        command.studentId,
+        studentLicense.licenseTier,
+        course.licenseCategory,
+      );
+    }
+
     if (course.capacity !== null) {
       const currentCount = await this.courseRepository.countEnrollments(
         command.courseId,
@@ -59,6 +80,7 @@ export class EnrollStudentUseCase
     });
 
     await this.enrollmentRepository.save(enrollment);
+    await this.courseCache.invalidateCourse(command.courseId);
 
     await this.eventPublisher.publish(
       new CourseEnrollmentCreatedEvent(
