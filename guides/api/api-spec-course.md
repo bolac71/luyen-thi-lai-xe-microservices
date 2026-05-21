@@ -9,6 +9,8 @@
 **OpenAPI JSON qua Kong:** `http://localhost:8000/course-service/docs-json`  
 **Version:** 1.0.0
 
+Course list/detail endpoints use Redis cache-aside for high read traffic. Cache TTL is 600 seconds and cache entries are invalidated when course content, lessons, materials, activation state, or enrollment capacity-affecting state changes. If Redis is unavailable, course-service falls back to PostgreSQL and keeps the public response shape unchanged.
+
 Course-service validate JWT/RBAC tại service bằng Keycloak guard. Frontend gọi qua Kong và gửi `Authorization: Bearer <access_token>`. Service lấy actor id từ `JWT.sub`; `x-user-id` chỉ là fallback cho debug/local script cũ.
 
 ---
@@ -77,6 +79,8 @@ Lỗi domain:
 | 422 | `COURSE_HAS_NO_LESSON` | Khóa học chưa có bài học |
 | 422 | `ENROLLMENT_ALREADY_COMPLETED` | Enrollment đã completed |
 | 422 | `COURSE_CAPACITY_EXCEEDED` | Vượt quá sức chứa khóa học |
+| 422 | `STUDENT_LICENSE_NOT_ASSIGNED` | Course-service chưa có license tier của student từ user-service |
+| 422 | `STUDENT_LICENSE_MISMATCH` | License tier của student không khớp `licenseCategory` của khóa học |
 
 ---
 
@@ -167,7 +171,7 @@ Danh sách khóa học cho admin dashboard.
 | Param | Type | Default | Validation |
 | --- | --- | ---: | --- |
 | `page` | number | 1 | integer, `>= 1` |
-| `size` | number | 20 | integer, `>= 1` |
+| `size` | number | 20 | integer, `1..100` |
 | `licenseCategory` | LicenseCategory | - | enum |
 | `status` | CourseStatus | - | enum |
 
@@ -620,6 +624,8 @@ Thêm tài liệu học tập. Nếu có `mediaFileId`, course-service phát eve
 
 Đăng ký khóa học. `studentId` lấy từ `sub` trong JWT của caller; endpoint không cần request body.
 
+Course-service kiểm tra license tier của student từ local read model được đồng bộ bởi event `user.student.license-assigned`. Student chỉ được enroll khóa học khi license tier đã assign trong user-service khớp với `licenseCategory` của khóa học. Nếu event chưa được consume hoặc student chưa được assign license, API trả `STUDENT_LICENSE_NOT_ASSIGNED`; nếu khác hạng, API trả `STUDENT_LICENSE_MISMATCH`.
+
 **Auth:** `STUDENT`
 
 **Response `201 Created`**
@@ -658,7 +664,7 @@ Danh sách enrollment của student hiện tại.
 | Param | Type | Default | Validation |
 | --- | --- | ---: | --- |
 | `page` | number | 1 | integer, `>= 1` |
-| `size` | number | 20 | integer, `>= 1` |
+| `size` | number | 20 | integer, `1..100` |
 | `status` | EnrollmentStatus | - | enum |
 
 **Response `200 OK`**
@@ -768,10 +774,13 @@ Course-service consume queue `course_service_events`.
 {
   "eventName": "user.student.license-assigned",
   "studentId": "student-uuid",
-  "newTier": "B2",
-  "oldTier": null
+  "oldLicenseTier": null,
+  "newLicenseTier": "B2",
+  "changedById": "admin-uuid"
 }
 ```
+
+Course-service lưu event này vào read model `student_license_profiles` để enforce rule enroll theo hạng bằng lái.
 
 ### `media.file.deleted`
 

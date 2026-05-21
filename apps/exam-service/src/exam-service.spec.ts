@@ -3,11 +3,14 @@ import { QuestionPoolClient } from './application/ports/question-pool.client';
 import { UserProfileClient } from './application/ports/user-profile.client';
 import { ListAvailableExamsQuery } from './application/use-cases/list-available-exams/list-available-exams.query';
 import { ListAvailableExamsUseCase } from './application/use-cases/list-available-exams/list-available-exams.use-case';
+import { GetSessionResultQuery } from './application/use-cases/get-session-result/get-session-result.query';
+import { GetSessionResultUseCase } from './application/use-cases/get-session-result/get-session-result.use-case';
 import { StartSessionCommand } from './application/use-cases/start-session/start-session.command';
 import { StartSessionUseCase } from './application/use-cases/start-session/start-session.use-case';
 import { SubmitSessionCommand } from './application/use-cases/submit-session/submit-session.command';
 import { SubmitSessionUseCase } from './application/use-cases/submit-session/submit-session.use-case';
 import { ExamSession } from './domain/aggregates/exam-session/exam-session.aggregate';
+import { ExamSessionStatus } from './domain/aggregates/exam-session/exam-session.types';
 import { ExamTemplate } from './domain/aggregates/exam-template/exam-template.aggregate';
 import { LicenseCategory } from './domain/aggregates/exam-template/exam-template.types';
 import {
@@ -51,6 +54,54 @@ function createSession() {
         correctOptionId: 'q1-o1',
         isCritical: false,
         displayOrder: 1,
+        optionsSnapshot: [
+          { id: 'q1-o1', content: 'A', displayOrder: 1 },
+          { id: 'q1-o2', content: 'B', displayOrder: 2 },
+        ],
+      },
+      {
+        questionId: 'q2',
+        questionContent: 'Question 2',
+        correctOptionId: 'q2-o1',
+        isCritical: true,
+        displayOrder: 2,
+        optionsSnapshot: [
+          { id: 'q2-o1', content: 'A', displayOrder: 1 },
+          { id: 'q2-o2', content: 'B', displayOrder: 2 },
+        ],
+      },
+    ],
+  });
+}
+
+function createExpiredSession() {
+  const now = new Date();
+  return ExamSession.reconstitute({
+    id: 'session-id',
+    studentId: 'student-id',
+    templateId: 'template-id',
+    licenseCategory: LicenseCategory.B2,
+    passingScore: 2,
+    durationMinutes: 20,
+    maxCriticalMistakes: 0,
+    status: ExamSessionStatus.IN_PROGRESS,
+    score: null,
+    isPassed: null,
+    failedByCritical: false,
+    criticalMistakes: 0,
+    startedAt: new Date(now.getTime() - 30 * 60_000),
+    finishedAt: null,
+    expiresAt: new Date(now.getTime() - 10 * 60_000),
+    createdAt: new Date(now.getTime() - 30 * 60_000),
+    updatedAt: new Date(now.getTime() - 30 * 60_000),
+    questions: [
+      {
+        questionId: 'q1',
+        questionContent: 'Question 1',
+        correctOptionId: 'q1-o1',
+        isCritical: false,
+        displayOrder: 1,
+        selectedOptionId: 'q1-o1',
         optionsSnapshot: [
           { id: 'q1-o1', content: 'A', displayOrder: 1 },
           { id: 'q1-o2', content: 'B', displayOrder: 2 },
@@ -146,6 +197,17 @@ describe('ExamSession domain', () => {
     session.submit();
 
     expect(() => session.submit()).toThrow(ExamSessionAlreadyFinishedException);
+  });
+
+  it('finalizes an expired in-progress session as timed out', () => {
+    const session = createExpiredSession();
+
+    const finalized = session.expireIfNeeded();
+
+    expect(finalized).toBe(true);
+    expect(session.status).toBe(ExamSessionStatus.TIMED_OUT);
+    expect(session.score).toBe(1);
+    expect(session.finishedAt).toBeInstanceOf(Date);
   });
 });
 
@@ -510,6 +572,29 @@ describe('Exam use cases', () => {
       expect.arrayContaining([
         expect.objectContaining({ eventName: 'exam.session.completed' }),
         expect.objectContaining({ eventName: 'exam.session.passed' }),
+      ]),
+    );
+  });
+
+  it('lazily finalizes an expired session before returning its result', async () => {
+    const session = createExpiredSession();
+    sessionRepository.findById.mockResolvedValue(session);
+
+    const useCase = new GetSessionResultUseCase(
+      sessionRepository,
+      eventPublisher,
+    );
+    const result = await useCase.execute(
+      new GetSessionResultQuery('session-id', 'student-id'),
+    );
+
+    expect(result.status).toBe(ExamSessionStatus.TIMED_OUT);
+    expect(result.score).toBe(1);
+    expect(sessionRepository.save).toHaveBeenCalledWith(session);
+    expect(eventPublisher.publishAll).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ eventName: 'exam.session.completed' }),
+        expect.objectContaining({ eventName: 'exam.session.failed' }),
       ]),
     );
   });

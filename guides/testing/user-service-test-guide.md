@@ -593,8 +593,8 @@ curl -s -X PATCH http://localhost:3002/admin/users/student-uuid-0003/lock \
 curl -s -X PATCH http://localhost:3002/admin/users/student-uuid-0003/license-tier \
   -H "Content-Type: application/json" \
   -H "x-user-id: admin-uuid-0001" \
-  -d '{ "licenseTier": "B2" }'
-# Kết quả mong đợi: HTTP 204
+  -d '{ "licenseTier": "B2" }' | jq '.data.studentDetail.licenseTier'
+# Kết quả mong đợi: "B2"
 ```
 
 **Xác nhận license tier đã được gán:**
@@ -667,6 +667,7 @@ Vào tab **Queues** để thấy:
 
 - `user_service_events` — queue user-service đang CONSUME
 - `user_service_publish` — queue user-service PUBLISH events vào
+- `course_service_events` — nhận event `user.student.license-assigned` từ user-service để course-service sync license tier read model
 
 ### 5.2 Simulate event `identity.user.created`
 
@@ -963,9 +964,9 @@ curl -s -X PATCH $BASE/users/me -H "Content-Type: application/json" -H "x-user-i
   -d '{"address":"123 Test St"}' | jq '.data.address'  # → "123 Test St"
 
 # 5. Gán license tier
-curl -s -X PATCH $BASE/users/test-001/license-tier \
+curl -s -X PATCH $BASE/admin/users/test-001/license-tier \
   -H "Content-Type: application/json" -H "x-user-id: test-001" \
-  -d '{"licenseTier":"B2"}' -o /dev/null -w "%{http_code}"  # → 204
+  -d '{"licenseTier":"B2"}' | jq '.data.studentDetail.licenseTier'  # → "B2"
 
 # 6. Verify license tier
 curl -s $BASE/users/test-001 | jq '.data.studentDetail.licenseTier'  # → "B2"

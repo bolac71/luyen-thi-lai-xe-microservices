@@ -33,8 +33,12 @@ export class HttpQuestionPoolClient extends QuestionPoolClient {
       },
       body: JSON.stringify(request),
     });
-    if (!response.ok)
-      throw new Error(`Question pool request failed: ${response.status}`);
+    if (!response.ok) {
+      const responseBody = await response.text();
+      throw new Error(
+        `Question pool request failed: ${response.status} ${responseBody}`,
+      );
+    }
     const envelope = (await response.json()) as ApiEnvelope<{
       items: QuestionPoolItem[];
     }>;

@@ -47,6 +47,8 @@ Sau khi seed, kiểm tra config course-service:
 
 ```bash
 npm run consul:list
+npm run consul:get -- config/development-local/course-service/redis.url
+# Expected: redis://localhost:6379
 # Tìm các key: config/development-local/course-service/...
 ```
 
@@ -122,6 +124,8 @@ ADMIN_ID      = admin-uuid-0003
 ---
 
 ## 4. Test Course endpoints
+
+> Course list/detail uses Redis cache-aside with 600-second TTL. If Redis is unavailable, requests fall back to PostgreSQL and keep the same response shape.
 
 > Tất cả các lệnh curl sau gọi **trực tiếp** vào course-service (port 3004).
 
@@ -476,6 +480,21 @@ curl -s -X POST "http://localhost:3004/admin/courses/$COURSE_ID/materials" \
 
 > Đảm bảo course đang ở status ACTIVE trước khi test enroll.
 
+**Chuẩn bị license tier read model cho student:**
+
+Course-service enroll dựa trên read model được sync từ event `user.student.license-assigned`. Trước khi gọi enroll trực tiếp trong môi trường test, publish event vào queue `course_service_events` hoặc dùng flow user-service assign license tier.
+
+Payload RabbitMQ mẫu cho course `$COURSE_ID` có `licenseCategory = B2`:
+
+```json
+{
+  "studentId": "student-uuid-0002",
+  "oldLicenseTier": null,
+  "newLicenseTier": "B2",
+  "changedById": "admin-uuid-0001"
+}
+```
+
 **Happy path:**
 
 ```bash
@@ -537,6 +556,42 @@ curl -s -X POST "http://localhost:3004/courses/$COURSE_ID/enroll" \
 }
 ```
 
+**Case: Student chưa có license tier sync sang course-service (expect 422):**
+
+```bash
+curl -s -X POST "http://localhost:3004/courses/$COURSE_ID/enroll" \
+  -H "x-user-id: student-no-license" | jq .
+```
+
+```json
+{
+  "success": false,
+  "code": "STUDENT_LICENSE_NOT_ASSIGNED",
+  "message": "Student student-no-license has no assigned license tier",
+  "timestamp": "...",
+  "path": "/courses/.../enroll"
+}
+```
+
+**Case: License tier không khớp licenseCategory của course (expect 422):**
+
+Publish event `user.student.license-assigned` cho `student-wrong-license` với `newLicenseTier = "A1"`, rồi enroll vào course B2:
+
+```bash
+curl -s -X POST "http://localhost:3004/courses/$COURSE_ID/enroll" \
+  -H "x-user-id: student-wrong-license" | jq .
+```
+
+```json
+{
+  "success": false,
+  "code": "STUDENT_LICENSE_MISMATCH",
+  "message": "Student student-wrong-license has license tier A1, but course requires B2",
+  "timestamp": "...",
+  "path": "/courses/.../enroll"
+}
+```
+
 **Case: Khóa học hết chỗ (expect 422):**
 
 ```bash
@@ -553,10 +608,12 @@ curl -s -X POST "http://localhost:3004/admin/courses/$SMALL_COURSE_ID/lessons" \
 curl -s -X PATCH "http://localhost:3004/admin/courses/$SMALL_COURSE_ID/activate" > /dev/null
 
 # Đăng ký student 1 (thành công)
+# Trước đó cần sync license tier C cho student-a qua event user.student.license-assigned.
 curl -s -X POST "http://localhost:3004/courses/$SMALL_COURSE_ID/enroll" \
   -H "x-user-id: student-a" | jq '.success'  # → true
 
 # Đăng ký student 2 (expect 422)
+# Trước đó cần sync license tier C cho student-b qua event user.student.license-assigned.
 curl -s -X POST "http://localhost:3004/courses/$SMALL_COURSE_ID/enroll" \
   -H "x-user-id: student-b" | jq .
 ```
@@ -720,17 +777,21 @@ Publish thủ công vào `course_service_events`:
 1. Vào http://localhost:15672
 2. Tab **Queues** → `course_service_events` → **Publish message**
 3. Routing key: `user.student.license-assigned`
-4. Payload:
+4. Payload theo Nest RMQ packet format:
 ```json
 {
-  "studentId": "student-uuid-0002",
-  "newTier": "B2",
-  "oldTier": null
+  "pattern": "user.student.license-assigned",
+  "data": {
+    "studentId": "student-uuid-0002",
+    "oldLicenseTier": null,
+    "newLicenseTier": "B2",
+    "changedById": "admin-uuid-0001"
+  }
 }
 ```
 5. Click **Publish message**
 
-**Kết quả mong đợi:** Course-service log: `Received user.student.license-assigned for studentId=student-uuid-0002, newTier=B2`
+**Kết quả mong đợi:** Course-service log: `Received user.student.license-assigned for studentId=student-uuid-0002, newLicenseTier=B2` và table `student_license_profiles` có record tương ứng.
 
 ---
 
@@ -750,6 +811,7 @@ Mở http://localhost:5555 để xem các bảng:
 - `course_requirements`
 - `course_materials`
 - `course_enrollments`
+- `student_license_profiles`
 
 ### Dùng psql trực tiếp
 
@@ -779,6 +841,11 @@ SELECT
   "completedAt"
 FROM course_enrollments
 ORDER BY "enrolledAt" DESC;
+
+-- Xem license tier read model sync từ user-service
+SELECT "studentId", "licenseTier", "syncedAt", "updatedAt"
+FROM student_license_profiles
+ORDER BY "updatedAt" DESC;
 
 -- Đếm số enrollment theo course (kiểm tra capacity)
 SELECT "courseId", COUNT(*) AS enrolled_count

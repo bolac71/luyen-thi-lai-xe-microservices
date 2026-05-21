@@ -16,7 +16,7 @@ import {
 import { LicenseCategory } from '../../domain/aggregates/exam-template/exam-template.types';
 
 export class TopicDistributionItemRequestDto {
-  @ApiProperty({ example: '10000000-0000-0000-0000-000000000101' })
+  @ApiProperty({ example: '9f49045f-156e-5252-8486-babb36dc74fd' })
   @IsString()
   @IsNotEmpty()
   topicId: string;

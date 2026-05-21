@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IUseCase } from '@repo/common';
 import { CourseNotFoundException } from '../../../domain/exceptions/course-not-found.exception';
 import { CourseRepository } from '../../../domain/repositories/course.repository';
+import { CourseCachePort } from '../../ports/course-cache.port';
 import { EventPublisher } from '../../ports/event-publisher.port';
 import { CourseResult } from '../shared/course.result';
 import { AddCourseMaterialCommand } from './add-course-material.command';
@@ -13,6 +14,7 @@ export class AddCourseMaterialUseCase
   constructor(
     private readonly courseRepository: CourseRepository,
     private readonly eventPublisher: EventPublisher,
+    private readonly courseCache: CourseCachePort,
   ) {}
 
   async execute(command: AddCourseMaterialCommand): Promise<CourseResult> {
@@ -27,6 +29,7 @@ export class AddCourseMaterialUseCase
     });
 
     await this.courseRepository.save(course);
+    await this.courseCache.invalidateCourse(course.id);
 
     await this.eventPublisher.publishAll(course.getDomainEvents());
     course.clearDomainEvents();
