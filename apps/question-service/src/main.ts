@@ -3,15 +3,20 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import {
   ApiExceptionFilter,
   ApiResponseInterceptor,
   setupMicroserviceSwagger,
+  WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
+
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   app.useGlobalInterceptors(new ApiResponseInterceptor());
   app.useGlobalFilters(new ApiExceptionFilter());
@@ -26,6 +31,6 @@ async function bootstrap() {
   const port = configService.get<number>('port') ?? 3000;
 
   await app.listen(port);
-  console.log(`✓ Question Service listening on port ${port}`);
+  logger.log(`Question Service listening on port ${port}`);
 }
 void bootstrap();

@@ -26,12 +26,10 @@
     },
     "exam-service": {
       "port": "3003",
-      "database.url": "postgresql://user:password@localhost:5434/exam_db",
       "rabbitmq.url": "amqp://localhost:5672"
     },
     "question-service": {
       "port": "3005",
-      "database.url": "postgresql://user:password@localhost:5436/question_db",
       "rabbitmq.url": "amqp://localhost:5672"
     },
     "course-service": {
@@ -41,17 +39,14 @@
     },
     "notification-service": {
       "port": "3006",
-      "database.url": "postgresql://user:password@localhost:5437/notification_db",
       "rabbitmq.url": "amqp://localhost:5672"
     },
     "analytics-service": {
       "port": "3007",
-      "database.url": "postgresql://user:password@localhost:5438/analytics_db",
       "rabbitmq.url": "amqp://localhost:5672"
     },
     "simulation-service": {
       "port": "3008",
-      "database.url": "postgresql://user:password@localhost:5439/simulation_db",
       "rabbitmq.url": "amqp://localhost:5672"
     },
     "docs-service": {

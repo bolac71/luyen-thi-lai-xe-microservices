@@ -5,7 +5,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaService } from './prisma/prisma.service';
-import { AppLoggerModule, ConsulConfigFactory } from '@repo/common';
+import {
+  AppLoggerModule,
+  ConsulConfigFactory,
+  HealthModule,
+} from '@repo/common';
 import Joi from 'joi';
 import {
   KeycloakConnectModule,
@@ -20,6 +24,18 @@ import { APP_GUARD } from '@nestjs/core';
 @Module({
   imports: [
     AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'identity-service',
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
+    }),
     HttpModule,
     ConfigModule.forRoot({
       load: [

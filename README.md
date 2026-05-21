@@ -1,18 +1,76 @@
-# Luyen Thi Lai Xe Microservices - Dev Guide
+# Luyen Thi Lai Xe Microservices - Baseline & Dev Guide
 
-Tai lieu nay la file duy nhat de team dev hieu cach code va van hanh local cho repo.
+Tai lieu nay chot baseline van hanh hien tai cua repo, de team khong bi mo ho giua local, staging va production.
 
 File roadmap cac viec can lam tiep theo: [README.NEXT-STEPS.md](./README.NEXT-STEPS.md)
 
-## 1. Tong quan kien truc
+## 1. Baseline da chot
+
+### 1.1 Production scope
+
+- Production hien tai gom **8 app services**:
+  - `identity-service`
+  - `user-service`
+  - `exam-service`
+  - `course-service`
+  - `question-service`
+  - `notification-service`
+  - `analytics-service`
+  - `simulation-service`
+- `docs-service` duoc chot la **dev-only**, khong nam trong production scope.
+- Ket luan nay khop voi:
+  - `render.yaml`
+  - `docker-compose.deploy.yml`
+  - `scripts/deploy-compose.sh`
+
+### 1.2 Phan tach moi truong
+
+- **Local hybrid dev**:
+  - Infrastructure chay trong Docker qua `docker-compose.infra.yml`
+  - Cac app services chay local qua `npm run dev`
+  - Kong dung `kong/kong.dev.yaml`
+- **Local full Docker**:
+  - Infrastructure + 8 app services chay trong `docker-compose.yaml`
+  - Phu hop de smoke test stack dong goi
+- **Staging/Production**:
+  - Dung `docker-compose.deploy.yml`
+  - Dung `kong/kong.yaml`
+  - Khong deploy `docs-service`
+
+### 1.3 Trang thai database hien tai
+
+- Cac service dang co DB lifecycle day du trong code hien tai:
+  - `identity-service`
+  - `user-service`
+  - `course-service`
+- Cac service dang duoc chot la **stateless tam thoi** o baseline hien tai:
+  - `exam-service`
+  - `question-service`
+  - `notification-service`
+  - `analytics-service`
+  - `simulation-service`
+- Nghia la:
+  - `docker-compose.infra.yml`, `docker-compose.yaml`, `docker-compose.deploy.yml` chi giu lai DB cho 3 service tren va `keycloak`
+  - neu service stateless nao sau nay can persistence that, phai them lai Prisma schema + migration + backup rule rieng
+
+### 1.4 Trang thai docs-service
+
+- `docs-service` chi dung cho dev/developer convenience.
+- Neu can xem Swagger tong hop, chay rieng service nay trong local.
+- Khong expose `docs-service` qua Kong production.
+
+## 2. Tong quan kien truc
 
 - Monorepo: npm workspaces + Turborepo
 - Backend: NestJS microservices trong `apps/*`
-- Gateway: Kong DB-less trong `kong/kong.yaml`
+- Gateway:
+  - `kong/kong.dev.yaml` cho hybrid local
+  - `kong/kong.yaml` cho full Docker/deploy
 - Message broker: RabbitMQ
 - Database: Postgres (database per service)
+- Config management: Consul
 
-## 2. Cau truc thu muc
+## 3. Cau truc thu muc
 
 ```text
 apps/
@@ -29,11 +87,65 @@ packages/
   eslint-config/
   typescript-config/
 kong/
+  kong.dev.yaml
   kong.yaml
 docker-compose.yaml
 ```
 
-## 3. Chay full stack bang Docker (khuyen nghi)
+## 4. Chay du an tren may moi
+
+### Cach 1 - Hybrid dev mode
+
+Yeu cau:
+
+- Node.js >= 18
+- npm
+- Docker Desktop
+
+Buoc 1 - Cai dependencies:
+
+```bash
+npm install
+```
+
+Buoc 2 - Khoi dong infrastructure:
+
+```bash
+npm run infra:up
+```
+
+Buoc 3 - Seed config local vao Consul:
+
+```bash
+npm run consul:seed:local
+```
+
+Buoc 4 - Chay toan bo services local:
+
+```bash
+npm run dev
+```
+
+Buoc 5 - Neu service co Prisma client rieng, generate truoc khi build/check:
+
+```bash
+npx turbo run prisma:generate
+```
+
+Buoc 6 - Neu can khoi tao schema + seed local cho cac DB-backed service:
+
+```bash
+npm run db:deploy
+npm run db:seed
+```
+
+Buoc 7 - Smoke test health endpoints qua Gateway:
+
+```bash
+npm run smoke
+```
+
+### Cach 2 - Full Docker stack
 
 Yeu cau:
 
@@ -42,7 +154,7 @@ Yeu cau:
 Start:
 
 ```bash
-docker compose up --build
+npm run docker:up
 ```
 
 URL quan trong:
@@ -50,15 +162,21 @@ URL quan trong:
 - Kong Proxy: http://localhost:8000
 - Kong Admin API: http://localhost:8001
 - RabbitMQ UI: http://localhost:15672
-- **Consul UI & KV Store: http://localhost:8500** (centralized configuration)
+- Consul UI: http://localhost:8500
+- Keycloak: http://localhost:8080
+
+Luu y:
+
+- Full Docker hien tai khong chay `docs-service`.
+- Neu can Swagger tong hop, chay `docs-service` rieng trong local.
 
 Stop:
 
 ```bash
-docker compose down
+npm run docker:down
 ```
 
-## 4. Consul Configuration Management
+## 5. Consul Configuration Management
 
 Tất cả microservices sử dụng **Consul** để quản lý configuration tập trung.
 
@@ -95,7 +213,7 @@ npm run consul:list /config/development
 npm run consul:get /config/development/identity-service/database.url
 ```
 
-## 5. Route qua gateway
+## 6. Route qua gateway
 
 - /auth -> identity-service
 - /users -> user-service
@@ -106,7 +224,9 @@ npm run consul:get /config/development/identity-service/database.url
 - /analytics -> analytics-service
 - /simulations -> simulation-service
 
-## 6. Chay local de code/debug
+Khong co route `/docs` trong production baseline.
+
+## 7. Chay local de code/debug
 
 Yeu cau:
 
@@ -145,6 +265,17 @@ npm run dev
 npm run lint
 npm run check-types
 npm run format
+npm run prisma:generate
+npm run db:deploy
+npm run db:seed
+npm run db:backup:local
+npm run smoke
+```
+
+Neu can generate Prisma client truoc khi verify:
+
+```bash
+npx turbo run prisma:generate
 ```
 
 Lenh DB cho identity-service:
@@ -155,6 +286,12 @@ npm run db:migrate -w identity-service
 npm run db:seed -w identity-service
 ```
 
+Lenh DB cap root hien tai chi ap dung cho 3 service co persistence:
+
+- `identity-service`
+- `user-service`
+- `course-service`
+
 Neu chay bang Docker network noi bo:
 
 ```bash
@@ -163,7 +300,7 @@ docker compose run --rm identity-service npm run db:deploy -w identity-service
 docker compose run --rm identity-service npm run db:seed -w identity-service
 ```
 
-## 7. Cach tao service moi
+## 8. Cach tao service moi
 
 Vi du service moi: payment-service
 
@@ -207,7 +344,7 @@ docker compose up --build -d
 curl http://localhost:8000/payments
 ```
 
-## 7. Su dung thu vien noi bo packages/common
+## 9. Su dung thu vien noi bo packages/common
 
 Muc tieu cua `packages/common/src`:
 
@@ -230,7 +367,7 @@ Quy uoc:
 - Event name format: `domain.action.v1`
 - Breaking change thi tao version moi, khong sua de vo tuong thich.
 
-## 8. Quy trinh code trong team
+## 10. Quy trinh code trong team
 
 1. Keo code moi nhat.
 2. Chay lint + typecheck truoc khi push.
@@ -322,7 +459,7 @@ npm run check-types
 npm run test -w identity-service
 ```
 
-## 9. Troubleshooting nhanh
+## 11. Troubleshooting nhanh
 
 Kong route khong nhan:
 
@@ -338,7 +475,7 @@ Bi trung port local:
 
 - Set PORT rieng cho tung service
 
-## 10. Definition of Done cho feature/service
+## 12. Definition of Done cho feature/service
 
 - Co validation input
 - Co unit test cho business logic chinh

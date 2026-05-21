@@ -49,7 +49,7 @@ export class AppService {
         tokenType: response.data.token_type,
         scope: response.data.scope,
       };
-    } catch (e) {
+    } catch (_e) {
       throw new UnauthorizedException(
         'Tài khoản hoặc mật khẩu không chính xác',
       );
