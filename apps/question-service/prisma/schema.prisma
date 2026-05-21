@@ -67,6 +67,7 @@ model Question {
 
   topic   QuestionTopic    @relation(fields: [topicId], references: [id])
   options QuestionOption[]
+  versions QuestionVersion[]
 
   @@index([topicId])
   @@index([topicId, isActive, isDeleted])
@@ -74,6 +75,30 @@ model Question {
   @@index([createdAt])
   @@index([licenseCategories], type: Gin)
   @@map("questions")
+}
+
+model QuestionVersion {
+  id                String             @id @default(uuid())
+  questionId        String
+  version           Int
+  content           String             @db.Text
+  type              QuestionType
+  licenseCategories LicenseCategory[]
+  difficulty        QuestionDifficulty
+  explanation       String             @db.Text
+  imageUrl          String?
+  mediaFileId       String?
+  isCritical        Boolean
+  isActive          Boolean
+  topicId           String
+  optionsSnapshot   Json
+  createdAt         DateTime           @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, version])
+  @@index([questionId, createdAt])
+  @@map("question_versions")
 }
 
 model QuestionOption {

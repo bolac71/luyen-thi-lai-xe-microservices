@@ -655,3 +655,8 @@ Client backend cần có:
 | Service accounts       | Enabled                                            |
 | Realm management roles | `manage-users`, `view-realm`                       |
 | Realm roles            | `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR`, `STUDENT` |
+## Logout Blacklist Enforcement
+
+`POST /logout` stores the access token `jti` in Redis until the JWT expires. `identity-service` has a global `TokenBlacklistGuard`, so protected identity/admin APIs reject a logged-out access token with `401`.
+
+Kong still validates JWT signature/expiry. Redis blacklist enforcement is service-side and must be enabled in each service that needs immediate revocation beyond identity APIs.

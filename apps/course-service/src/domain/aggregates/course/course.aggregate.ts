@@ -158,6 +158,11 @@ export class Course extends AggregateRoot<string> {
     this._updatedAt = new Date();
   }
 
+  archive(): void {
+    this._status = CourseStatus.ARCHIVED;
+    this._updatedAt = new Date();
+  }
+
   addLesson(props: CreateLessonProps): Lesson {
     const lesson = new Lesson(
       crypto.randomUUID(),

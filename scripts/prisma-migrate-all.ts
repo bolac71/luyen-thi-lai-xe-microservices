@@ -9,6 +9,10 @@ const SERVICES = [
   'user-service',
   'course-service',
   'question-service',
+  'exam-service',
+  'notification-service',
+  'analytics-service',
+  'simulation-service',
   'media-service',
 ] as const;
 

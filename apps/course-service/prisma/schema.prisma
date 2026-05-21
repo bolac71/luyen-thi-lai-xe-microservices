@@ -22,6 +22,7 @@ enum LicenseCategory {
 enum CourseStatus {
   DRAFT
   ACTIVE
+  ARCHIVED
 }
 
 enum EnrollmentStatus {

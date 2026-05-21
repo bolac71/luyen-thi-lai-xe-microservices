@@ -1348,3 +1348,26 @@ Các command trong guide dùng Bash syntax. Nếu dùng PowerShell:
 - Thay `\` thành backtick `` ` ``.
 - Thay `VAR=value` bằng `$env:VAR="value"` hoặc `$VAR="value"` tùy nhu cầu.
 - Nếu `curl` bị alias sang `Invoke-WebRequest`, dùng `curl.exe`.
+## ASR: Admin History And Missed Questions
+
+### Admin Exam History
+
+```http
+GET http://localhost:3003/admin/exams/sessions?studentId=<studentId>&isPassed=false&from=2026-05-01T00:00:00.000Z&to=2026-05-31T23:59:59.999Z
+Authorization: Bearer <admin_or_instructor_token>
+```
+
+Expected: paginated sessions ordered by `startedAt desc`.
+
+### Missed Question Review
+
+```http
+GET http://localhost:3003/exams/review/missed-questions?limit=20
+Authorization: Bearer <student_token>
+```
+
+Expected: response contains question snapshots and options only. It must not contain `correctOptionId`, `isCorrect`, or explanation.
+
+### Template Snapshot
+
+After starting a session, verify `exam_sessions` stores template snapshot columns. Updating the template later must not change existing session grading/history context.

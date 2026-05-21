@@ -18,6 +18,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
       COURSE_NOT_FOUND: HttpStatus.NOT_FOUND,
       LESSON_NOT_FOUND: HttpStatus.NOT_FOUND,
       ENROLLMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
+      ENROLLMENT_UNAUTHORIZED: HttpStatus.FORBIDDEN,
       ENROLLMENT_ALREADY_EXISTS: HttpStatus.CONFLICT,
       LESSON_ALREADY_COMPLETED: HttpStatus.CONFLICT,
       INSTRUCTOR_ALREADY_ASSIGNED: HttpStatus.CONFLICT,

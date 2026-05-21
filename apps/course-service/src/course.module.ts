@@ -9,12 +9,14 @@ import { AddCourseMaterialUseCase } from './application/use-cases/add-course-mat
 import { AddLessonUseCase } from './application/use-cases/add-lesson/add-lesson.use-case';
 import { CompleteLessonUseCase } from './application/use-cases/complete-lesson/complete-lesson.use-case';
 import { CreateCourseUseCase } from './application/use-cases/create-course/create-course.use-case';
+import { DeleteCourseUseCase } from './application/use-cases/delete-course/delete-course.use-case';
 import { EnrollStudentUseCase } from './application/use-cases/enroll-student/enroll-student.use-case';
 import { GetCourseUseCase } from './application/use-cases/get-course/get-course.use-case';
 import { GetEnrollmentUseCase } from './application/use-cases/get-enrollment/get-enrollment.use-case';
 import { ListCoursesUseCase } from './application/use-cases/list-courses/list-courses.use-case';
 import { ListStudentEnrollmentsUseCase } from './application/use-cases/list-student-enrollments/list-student-enrollments.use-case';
 import { RemoveLessonUseCase } from './application/use-cases/remove-lesson/remove-lesson.use-case';
+import { ResetEnrollmentProgressUseCase } from './application/use-cases/reset-enrollment-progress/reset-enrollment-progress.use-case';
 import { SyncStudentLicenseUseCase } from './application/use-cases/sync-student-license/sync-student-license.use-case';
 import { UpdateCourseUseCase } from './application/use-cases/update-course/update-course.use-case';
 import { CourseEnrollmentRepository } from './domain/repositories/course-enrollment.repository';
@@ -26,6 +28,7 @@ import {
   RedisCourseCacheService,
 } from './infrastructure/cache/redis-course-cache.service';
 import {
+  ANALYTICS_SERVICE_CLIENT,
   MEDIA_SERVICE_CLIENT,
   RABBITMQ_CLIENT,
   RabbitMqEventPublisher,
@@ -66,6 +69,20 @@ import { MessagingController } from './presentation/messaging/messaging.controll
               config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
             ],
             queue: 'media_service_events',
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+      {
+        name: ANALYTICS_SERVICE_CLIENT,
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [
+              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
+            ],
+            queue: 'analytics_service_events',
             queueOptions: { durable: true },
           },
         }),
@@ -123,12 +140,14 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     AddCourseMaterialUseCase,
     GetCourseUseCase,
     ListCoursesUseCase,
+    DeleteCourseUseCase,
 
     // Enrollment use cases
     EnrollStudentUseCase,
     CompleteLessonUseCase,
     GetEnrollmentUseCase,
     ListStudentEnrollmentsUseCase,
+    ResetEnrollmentProgressUseCase,
     SyncStudentLicenseUseCase,
   ],
 })

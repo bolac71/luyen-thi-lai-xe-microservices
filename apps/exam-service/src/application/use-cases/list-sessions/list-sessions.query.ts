@@ -6,5 +6,8 @@ export class ListSessionsQuery {
     readonly page: number,
     readonly size: number,
     readonly status?: ExamSessionStatus,
+    readonly isPassed?: boolean,
+    readonly from?: Date,
+    readonly to?: Date,
   ) {}
 }

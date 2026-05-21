@@ -1028,4 +1028,38 @@ Frontend note: use this endpoint for result screen refresh/deep link; use submit
   "licenseCategory": "B2"
 }
 ```
+## ASR Additions: History Filters And Missed Review
+
+### GET `/exams/sessions`
+
+Student exam history now supports filters:
+
+- `page`, `size`
+- `status`
+- `isPassed`
+- `from`, `to` ISO timestamps
+
+### GET `/admin/exams/sessions`
+
+Role: `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR`.
+
+Lists exam history across students for dashboard/review workflows.
+
+Query filters:
+
+- `studentId`
+- `page`, `size`
+- `status`
+- `isPassed`
+- `from`, `to`
+
+### GET `/exams/review/missed-questions`
+
+Role: `STUDENT`.
+
+Query: `limit` from 1 to 50, default 20.
+
+Returns recently missed question snapshots for review. Response does not include `correctOptionId`, `isCorrect`, or explanations.
+
+Exam sessions store immutable template snapshot fields at start time: template name/version, license category, total questions, passing score, duration, critical config, and topic distribution.
 

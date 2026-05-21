@@ -21,6 +21,8 @@ import { AddLessonCommand } from '../../application/use-cases/add-lesson/add-les
 import { AddLessonUseCase } from '../../application/use-cases/add-lesson/add-lesson.use-case';
 import { CreateCourseCommand } from '../../application/use-cases/create-course/create-course.command';
 import { CreateCourseUseCase } from '../../application/use-cases/create-course/create-course.use-case';
+import { DeleteCourseCommand } from '../../application/use-cases/delete-course/delete-course.command';
+import { DeleteCourseUseCase } from '../../application/use-cases/delete-course/delete-course.use-case';
 import { GetCourseQuery } from '../../application/use-cases/get-course/get-course.query';
 import { GetCourseUseCase } from '../../application/use-cases/get-course/get-course.use-case';
 import { ListCoursesQuery } from '../../application/use-cases/list-courses/list-courses.query';
@@ -66,6 +68,7 @@ export class AdminCourseController {
     private readonly addCourseMaterialUseCase: AddCourseMaterialUseCase,
     private readonly getCourseUseCase: GetCourseUseCase,
     private readonly listCoursesUseCase: ListCoursesUseCase,
+    private readonly deleteCourseUseCase: DeleteCourseUseCase,
   ) {}
 
   @Post()
@@ -192,6 +195,16 @@ export class AdminCourseController {
         dto.mediaFileId,
         dto.type,
       ),
+    );
+    return CourseResponseDto.fromResult(result);
+  }
+
+  @Delete(':id')
+  @Roles({ roles: ['realm:ADMIN', 'realm:CENTER_MANAGER'] })
+  @ApiOperation({ summary: 'Archive course' })
+  async deleteCourse(@Param('id') id: string): Promise<CourseResponseDto> {
+    const result = await this.deleteCourseUseCase.execute(
+      new DeleteCourseCommand(id),
     );
     return CourseResponseDto.fromResult(result);
   }
