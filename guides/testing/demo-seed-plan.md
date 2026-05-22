@@ -1,6 +1,87 @@
-# Demo Seed Plan
+# Demo Seed Plan And Guide
 
 Mục tiêu: sau khi frontend pull code và chạy migration, chỉ cần chạy một lệnh root `npm run db:seed` là có đủ dữ liệu demo cho luồng identity -> user profile -> course enrollment -> learning progress -> exam session -> notification -> simulation.
+
+---
+
+## Usage
+
+Chạy migration trước:
+
+```powershell
+npm.cmd run db:deploy
+```
+
+Seed toàn bộ dữ liệu demo:
+
+```powershell
+npm.cmd run db:seed
+```
+
+PowerShell có thể chặn `npm.ps1`, vì vậy trên Windows ưu tiên `npm.cmd`.
+
+Seed riêng question bank nếu chỉ cần reset 600 câu hỏi:
+
+```powershell
+npm.cmd run db:seed:question
+```
+
+Root seed hiện chạy theo thứ tự phụ thuộc:
+
+1. `identity-service`
+2. `user-service`
+3. `question-service`
+4. `exam-service`
+5. `course-service`
+6. `analytics-service`
+7. `notification-service`
+8. `simulation-service`
+
+Seed scripts dùng deterministic ids và `upsert`, nên có thể chạy lại nhiều lần.
+
+---
+
+## Seeded Demo Users
+
+| Role | Email | Notes |
+| --- | --- | --- |
+| `ADMIN` | `admin@test.com` | Seeded admin, id cố định `10000000-0000-0000-0000-000000000001` |
+| `CENTER_MANAGER` | `manager@test.com` | Manager demo |
+| `INSTRUCTOR` | `instructor.b1@test.com` | Instructor cho các khóa A1/B1 |
+| `INSTRUCTOR` | `instructor.b2@test.com` | Instructor cho các khóa B2 |
+| `STUDENT` | `student.a1@test.com` | License `A1`, progress active |
+| `STUDENT` | `student.b1@test.com` | License `B1`, progress tốt |
+| `STUDENT` | `student.b1.low@test.com` | License `B1`, có warning/weak topics |
+| `STUDENT` | `student.b2@test.com` | License `B2`, có course completed |
+| `STUDENT` | `student.b2.new@test.com` | License `B2`, trạng thái mới |
+
+Tất cả demo users được seed vào cả `identity_db` và Keycloak. Password mặc định:
+
+```text
+123456
+```
+
+Identity seed dùng Keycloak Admin API để partial-import users với deterministic ids, nên `JWT.sub` khớp với ids trong các database service. Nếu chỉ muốn seed database mà không đụng Keycloak, có thể đặt:
+
+```powershell
+$env:SKIP_KEYCLOAK_SEED = "1"
+npm.cmd --workspace=apps/identity-service run db:seed
+```
+
+---
+
+## Seeded Dataset Summary
+
+| Service | Data |
+| --- | --- |
+| `identity-service` | 9 demo identity users |
+| `user-service` | 9 user profiles, 5 student details, license assignment audits |
+| `question-service` | 6 topics, 600 questions từ `seed/600-cau-hoi.docx` |
+| `exam-service` | 4 active templates: A1 basic, B1 basic, B2 basic, B2 advanced |
+| `course-service` | 8 courses, lessons, materials, requirements, instructor assignments, enrollments, student license read model |
+| `analytics-service` | Learning profiles, 7-day activity trend, weak-topic trackers |
+| `notification-service` | Welcome/reminder notifications and one academic warning for low-score B1 student |
+| `simulation-service` | 12 maneuvers, 36 checkpoints, 12 maneuver errors, one completed sample simulation session |
 
 ---
 
@@ -8,17 +89,17 @@ Mục tiêu: sau khi frontend pull code và chạy migration, chỉ cần chạy
 
 | Service | Seed status | Notes |
 | --- | --- | --- |
-| `identity-service` | Có script và có `prisma/seed.ts` | Hiện chỉ seed `admin@test.com` vào `identity_db`. Chưa seed bộ user demo đầy đủ cho student/instructor/center manager. |
-| `user-service` | Có script trong `package.json`, thiếu file seed | `apps/user-service/package.json` trỏ tới `prisma/seed.ts` nhưng file chưa tồn tại. Root `npm run db:seed` sẽ fail khi chạy service này. |
+| `identity-service` | Đã có script và seed demo users | Seed admin, manager, instructors, students. |
+| `user-service` | Đã có script và seed profile/license | Đã fix thiếu `apps/user-service/prisma/seed.ts`. |
 | `question-service` | Có script và có seed lớn | Seed 6 topic và 600 câu hỏi từ `seed/600-cau-hoi.docx`. Đây là nguồn dữ liệu chính cho exam template/session. |
-| `course-service` | Chưa có seed script | Chưa có course, lesson, material, enrollment, student license profile demo tự động. |
-| `exam-service` | Chưa có seed script | Chưa có exam template demo tự động. Template hiện cần tạo thủ công qua API. |
-| `analytics-service` | Chưa có seed script | Analytics có thể tự build từ event, nhưng demo cần seed read model trực tiếp hoặc replay event sau khi seed dữ liệu nguồn. |
-| `notification-service` | Chưa có seed script | Chưa có warning/notification demo. |
-| `simulation-service` | Chưa có seed script | Bảng `maneuvers`, `maneuver_checkpoints`, `maneuver_errors` đang không có dữ liệu mẫu, nên các API maneuver có thể trả empty array. |
+| `course-service` | Đã có seed script | Seed course, lesson, material, enrollment, student license profile demo tự động. |
+| `exam-service` | Đã có seed script | Seed exam templates demo tự động. |
+| `analytics-service` | Đã có seed script | Seed read model trực tiếp cho demo speed. |
+| `notification-service` | Đã có seed script | Seed warning/notification demo. |
+| `simulation-service` | Đã có seed script | Seed `maneuvers`, `maneuver_checkpoints`, `maneuver_errors`. |
 | `media-service` | Chưa có seed script | Có thể để sau nếu demo chưa cần file thật. |
 
-Root seed runner `scripts/prisma-seed-all.ts` hiện discover service có `db:seed` rồi sort theo tên service. Khi mở rộng seed demo, nên chuyển sang thứ tự phụ thuộc tường minh để tránh service sau cần dữ liệu từ service trước.
+Root seed runner `scripts/prisma-seed-all.ts` hiện discover service có `db:seed` và sort theo thứ tự phụ thuộc tường minh để tránh service sau cần dữ liệu từ service trước.
 
 ---
 
@@ -119,47 +200,47 @@ Suggested B1/B2 dataset:
 
 ---
 
-## Implementation Plan
+## Implementation Plan Status
 
 ### Phase 1 - Fix seed runner foundation
 
-1. Add a deterministic service seed order in `scripts/prisma-seed-all.ts`:
+1. Done - Add a deterministic service seed order in `scripts/prisma-seed-all.ts`:
    `identity-service`, `user-service`, `question-service`, `exam-service`, `course-service`, `analytics-service`, `notification-service`, `simulation-service`.
-2. Keep the ability to run a single service:
+2. Done - Keep the ability to run a single service:
    `npm run db:seed:question`, `tsx scripts/prisma-seed-all.ts simulation-service`.
-3. Make seed scripts idempotent with `upsert`, `deleteMany` scoped by deterministic ids, or natural unique keys.
-4. Fix missing `apps/user-service/prisma/seed.ts` or remove the script until the seed exists. Recommended: implement the seed because user profile/license data is central to demo flows.
+3. Done - Make seed scripts idempotent with `upsert`, scoped deterministic ids, or natural unique keys.
+4. Done - Fix missing `apps/user-service/prisma/seed.ts`.
 
 ### Phase 2 - Seed base identities and profiles
 
-1. Extend identity seed with deterministic demo users.
-2. Seed user profiles and student details with matching ids.
-3. Seed license assignment audit rows for students.
-4. Seed course-service `student_license_profiles` mirror rows to support license consistency during enroll.
+1. Done - Extend identity seed with deterministic demo users.
+2. Done - Seed user profiles and student details with matching ids.
+3. Done - Seed license assignment audit rows for students.
+4. Done - Seed course-service `student_license_profiles` mirror rows to support license consistency during enroll.
 
 ### Phase 3 - Seed learning content
 
-1. Reuse existing question-service seed for 600 questions.
-2. Add exam-service seed for active templates per license category.
-3. Add course-service seed for courses, lessons, materials, requirements, instructors, enrollments.
-4. Add simulation-service seed for maneuvers/checkpoints/errors.
+1. Done - Reuse existing question-service seed for 600 questions.
+2. Done - Add exam-service seed for active templates per license category.
+3. Done - Add course-service seed for courses, lessons, materials, requirements, instructors, enrollments.
+4. Done - Add simulation-service seed for maneuvers/checkpoints/errors.
 
 ### Phase 4 - Seed demo state
 
-1. Seed analytics read models for dashboard pages.
-2. Seed notification rows and academic warnings.
-3. Optionally seed exam sessions only if frontend needs history before the user starts/submits a real exam. Prefer creating exam history through exam APIs in demo scripts because snapshots are domain-sensitive.
+1. Done - Seed analytics read models for dashboard pages.
+2. Done - Seed notification rows and academic warnings.
+3. Deferred - Exam sessions should still be created through exam APIs because snapshots are domain-sensitive.
 
 ### Phase 5 - Documentation and verification
 
-1. Update service testing guides with `npm run db:seed` as the standard demo setup.
-2. Add a seed verification section:
+1. Done here - Document `npm run db:seed` as the standard demo setup.
+2. Done here - Add a seed verification section:
    - course list has active courses,
    - exam templates exist,
    - simulation maneuvers return non-empty arrays,
    - analytics progress returns non-zero demo data,
    - notifications list returns seeded unread items.
-3. Add smoke script or checklist for frontend:
+3. Manual checklist:
    - login demo student,
    - view courses,
    - enroll matching license course,
@@ -172,8 +253,8 @@ Suggested B1/B2 dataset:
 
 ## Acceptance Criteria
 
-- `npm run db:deploy` then `npm run db:seed` completes from repo root without manual per-service commands.
-- The seed is safe to rerun.
+- `npm run db:deploy` then `npm run db:seed` completes from repo root without manual per-service commands. Verified with `npm.cmd run db:seed`.
+- The seed is safe to rerun. Verified by running `npm.cmd run db:seed` twice.
 - No seed depends on external HTTP services unless explicitly documented.
 - Frontend can load useful data immediately for course, exam, analytics, notification, and simulation screens.
 - Simulation maneuver APIs return non-empty data for at least `B1` and `B2`.

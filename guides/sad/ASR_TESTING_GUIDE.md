@@ -151,6 +151,14 @@ Nếu course-service có thêm read model license tier, cũng apply migration:
 
 ## 6. Seed Data
 
+Khuyến nghị hiện tại cho demo đầy đủ là chạy root seed một lần sau migration:
+
+```powershell
+npm.cmd run db:seed
+```
+
+Lệnh này seed theo thứ tự phụ thuộc: identity, user, question, exam, course, analytics, notification, simulation. Dataset gồm demo users/license, 600 câu hỏi, exam templates, courses/enrollments, analytics read model, notifications và simulation maneuvers/checkpoints/errors. Chi tiết nằm ở `guides/testing/demo-seed-plan.md`.
+
 ### 6.1 Seed Question Topics/Question Bank
 
 Nếu question-service có seed script:

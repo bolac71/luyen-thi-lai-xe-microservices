@@ -14,6 +14,16 @@ interface SeedableService {
 }
 
 const appsDir = path.resolve(process.cwd(), 'apps');
+const preferredSeedOrder = [
+  'identity-service',
+  'user-service',
+  'question-service',
+  'exam-service',
+  'course-service',
+  'analytics-service',
+  'notification-service',
+  'simulation-service',
+];
 
 function readPackageJson(packageJsonPath: string): PackageJson {
   return JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as PackageJson;
@@ -42,7 +52,19 @@ function discoverSeedableServices(): SeedableService[] {
       };
     })
     .filter((service): service is SeedableService => service !== null)
-    .sort((left, right) => left.serviceName.localeCompare(right.serviceName));
+    .sort((left, right) => {
+      const leftIndex = preferredSeedOrder.indexOf(left.serviceName);
+      const rightIndex = preferredSeedOrder.indexOf(right.serviceName);
+
+      if (leftIndex !== -1 || rightIndex !== -1) {
+        return (
+          (leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) -
+          (rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex)
+        );
+      }
+
+      return left.serviceName.localeCompare(right.serviceName);
+    });
 }
 
 function resolveRequestedServices(
