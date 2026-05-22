@@ -1,9 +1,29 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import {
+  AuthGuard,
+  KeycloakConnectModule,
+  KeycloakConnectOptions,
+  PolicyEnforcementMode,
+  ResourceGuard,
+  RoleGuard,
+  TokenValidation,
+} from 'nest-keycloak-connect';
+import Redis from 'ioredis';
 import { ConsulConfigFactory } from '@repo/common';
 import Joi from 'joi';
+import { LearningProgressRepository } from './domain/repositories/learning-progress.repository';
+import {
+  ProgressCacheService,
+  REDIS_CLIENT,
+} from './infrastructure/cache/progress-cache.service';
+import { PrismaLearningProgressRepository } from './infrastructure/persistence/prisma/prisma-learning-progress.repository';
+import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
+import { GetProgressUseCase } from './application/use-cases/get-progress/get-progress.use-case';
+import { RecordLearningEventUseCase } from './application/use-cases/record-events/record-events.use-case';
+import { AnalyticsController } from './presentation/http/analytics.controller';
+import { MessagingController } from './presentation/messaging/messaging.controller';
 
 @Module({
   imports: [
@@ -33,14 +53,64 @@ import Joi from 'joi';
               connectionTimeout: Joi.number().default(10000),
               heartbeat: Joi.number().default(60),
             }).optional(),
+            redis: Joi.object({
+              url: Joi.string().default('redis://localhost:6379'),
+            }).optional(),
+            keycloak: Joi.object({
+              authServerUrl: Joi.string().default('http://localhost:8080'),
+              realm: Joi.string().default('luyen-thi-lai-xe-realm'),
+              clientId: Joi.string().default('nestjs-backend'),
+              clientSecret: Joi.string().optional(),
+            }).default(),
           }).unknown(true),
           'analytics-service',
         ),
       ],
       isGlobal: true,
     }),
+    KeycloakConnectModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): KeycloakConnectOptions => ({
+        authServerUrl: configService.getOrThrow<string>(
+          'keycloak.authServerUrl',
+        ),
+        realm: configService.getOrThrow<string>('keycloak.realm'),
+        clientId: configService.getOrThrow<string>('keycloak.clientId'),
+        secret: configService.get<string>('keycloak.clientSecret') ?? '',
+        policyEnforcement: PolicyEnforcementMode.PERMISSIVE,
+        tokenValidation: TokenValidation.OFFLINE,
+      }),
+    }),
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AnalyticsController, MessagingController],
+  providers: [
+    PrismaService,
+    {
+      provide: REDIS_CLIENT,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const redis = new Redis(
+          configService.get<string>('redis.url') ?? 'redis://127.0.0.1:6379',
+          {
+            enableOfflineQueue: false,
+            maxRetriesPerRequest: 1,
+            lazyConnect: true,
+          },
+        );
+        redis.on('error', () => undefined);
+        return redis;
+      },
+    },
+    ProgressCacheService,
+    {
+      provide: LearningProgressRepository,
+      useClass: PrismaLearningProgressRepository,
+    },
+    GetProgressUseCase,
+    RecordLearningEventUseCase,
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: RoleGuard },
+    { provide: APP_GUARD, useClass: ResourceGuard },
+  ],
 })
 export class AppModule {}

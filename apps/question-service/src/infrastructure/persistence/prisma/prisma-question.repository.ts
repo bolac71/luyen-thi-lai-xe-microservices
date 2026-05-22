@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/question-client';
 import { Question } from '../../../domain/aggregates/question/question.aggregate';
 import {
   ListQuestionsFilter,
@@ -109,6 +110,42 @@ export class PrismaQuestionRepository extends QuestionRepository {
 
   async save(question: Question): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.question.findUnique({
+        where: { id: question.id },
+        include: { options: { orderBy: { displayOrder: 'asc' } } },
+      });
+      if (existing && existing.version < question.version) {
+        await tx.questionVersion.upsert({
+          where: {
+            questionId_version: {
+              questionId: existing.id,
+              version: existing.version,
+            },
+          },
+          create: {
+            questionId: existing.id,
+            version: existing.version,
+            content: existing.content,
+            type: existing.type,
+            licenseCategories: existing.licenseCategories,
+            difficulty: existing.difficulty,
+            explanation: existing.explanation,
+            imageUrl: existing.imageUrl,
+            mediaFileId: existing.mediaFileId,
+            isCritical: existing.isCritical,
+            isActive: existing.isActive,
+            topicId: existing.topicId,
+            optionsSnapshot: existing.options.map((option) => ({
+              id: option.id,
+              content: option.content,
+              isCorrect: option.isCorrect,
+              displayOrder: option.displayOrder,
+            })) as Prisma.InputJsonValue,
+          },
+          update: {},
+        });
+      }
+
       await tx.question.upsert({
         where: { id: question.id },
         create: {

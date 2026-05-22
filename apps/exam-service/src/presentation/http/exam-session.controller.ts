@@ -89,6 +89,9 @@ export class ExamSessionController {
         query.page ?? 1,
         query.size ?? 20,
         query.status,
+        query.isPassed,
+        query.from ? new Date(query.from) : undefined,
+        query.to ? new Date(query.to) : undefined,
       ),
     );
     return ListExamSessionsResponseDto.fromResult(result);

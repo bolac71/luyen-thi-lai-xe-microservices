@@ -12,6 +12,10 @@ export class ExamSessionCompletedEvent extends DomainEvent {
     readonly score: number,
     readonly isPassed: boolean,
     readonly licenseCategory: LicenseCategory,
+    readonly questions: Array<{
+      questionId: string;
+      isCorrect: boolean | null;
+    }> = [],
   ) {
     super();
   }

@@ -10,6 +10,7 @@ import { GetSessionQuestionsUseCase } from './application/use-cases/get-session-
 import { GetSessionResultUseCase } from './application/use-cases/get-session-result/get-session-result.use-case';
 import { GetTemplateUseCase } from './application/use-cases/get-template/get-template.use-case';
 import { ListAvailableExamsUseCase } from './application/use-cases/list-available-exams/list-available-exams.use-case';
+import { ListMissedQuestionsUseCase } from './application/use-cases/list-missed-questions/list-missed-questions.use-case';
 import { ListSessionsUseCase } from './application/use-cases/list-sessions/list-sessions.use-case';
 import { ListTemplatesUseCase } from './application/use-cases/list-templates/list-templates.use-case';
 import { SaveAnswerUseCase } from './application/use-cases/save-answer/save-answer.use-case';
@@ -32,8 +33,10 @@ import { PrismaExamSessionRepository } from './infrastructure/persistence/prisma
 import { PrismaExamTemplateRepository } from './infrastructure/persistence/prisma/prisma-exam-template.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
 import { ExamController } from './presentation/http/exam.controller';
+import { AdminExamSessionController } from './presentation/http/admin-exam-session.controller';
 import { ExamSessionController } from './presentation/http/exam-session.controller';
 import { ExamTemplateController } from './presentation/http/exam-template.controller';
+import { ExamReviewController } from './presentation/http/exam-review.controller';
 
 const rmqClientFactory = (queue: string) => ({
   inject: [ConfigService],
@@ -61,7 +64,13 @@ const rmqClientFactory = (queue: string) => ({
       },
     ]),
   ],
-  controllers: [ExamController, ExamTemplateController, ExamSessionController],
+  controllers: [
+    ExamController,
+    ExamTemplateController,
+    ExamSessionController,
+    ExamReviewController,
+    AdminExamSessionController,
+  ],
   providers: [
     PrismaService,
     DomainExceptionFilter,
@@ -83,6 +92,7 @@ const rmqClientFactory = (queue: string) => ({
     GetSessionQuestionsUseCase,
     GetSessionResultUseCase,
     ListSessionsUseCase,
+    ListMissedQuestionsUseCase,
   ],
 })
 export class ExamModule {}

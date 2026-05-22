@@ -1,0 +1,409 @@
+# Simulation Service API Specification
+
+**Base URL qua Kong:** `http://localhost:8000`  
+**Service path:** `/simulation`  
+**Direct local:** `http://localhost:3008`  
+**Swagger UI:** `http://localhost:3008/docs`  
+**Swagger UI qua Kong:** `http://localhost:8000/simulation-service/docs`  
+**OpenAPI JSON:** `http://localhost:3008/docs-json`  
+**OpenAPI JSON qua Kong:** `http://localhost:8000/simulation-service/docs-json`  
+**Version:** 1.0.0
+
+Simulation-service exposes maneuver/checkpoint learning content and a backend state machine for driving-practice sessions. Frontend calls protected APIs with `Authorization: Bearer <access_token>`; the service reads current student id from JWT `sub`. Do not send `x-user-id`.
+
+Maneuver error lists use Redis cache-aside. If Redis is unavailable, the service falls back to PostgreSQL and keeps response shape unchanged.
+
+---
+
+## Authentication
+
+| Endpoint | Role |
+| --- | --- |
+| `GET /simulation/maneuvers` | `STUDENT`, `INSTRUCTOR`, `ADMIN`, `CENTER_MANAGER` |
+| `GET /simulation/maneuvers/:id` | `STUDENT`, `INSTRUCTOR`, `ADMIN`, `CENTER_MANAGER` |
+| `GET /simulation/maneuver-errors` | `STUDENT`, `INSTRUCTOR`, `ADMIN`, `CENTER_MANAGER` |
+| `POST /simulation/sessions` | `STUDENT` |
+| `PATCH /simulation/sessions/:id/answers` | `STUDENT` |
+| `POST /simulation/sessions/:id/submit` | `STUDENT` |
+
+---
+
+## Response Format
+
+All successful responses are wrapped by the global `ApiResponseInterceptor`.
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/maneuvers?licenseCategory=B1",
+  "data": []
+}
+```
+
+Error responses:
+
+```json
+{
+  "success": false,
+  "code": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/sessions"
+}
+```
+
+---
+
+## Error Codes
+
+| HTTP | Code | Cause |
+| ---: | --- | --- |
+| 400 | `VALIDATION_ERROR` | Invalid body/query/path parameter |
+| 400 | `BAD_REQUEST` | Session is already finished |
+| 401 | `UNAUTHORIZED` | Missing or invalid access token |
+| 403 | `FORBIDDEN` | Token is valid but role is not allowed |
+| 404 | `NOT_FOUND` | Maneuver/session not found, or session does not belong to caller |
+| 500 | `INTERNAL_ERROR` | Database/cache error |
+
+---
+
+## Enums
+
+`LicenseCategory`: `A1` | `A2` | `B1` | `B2` | `C` | `D` | `E` | `F`  
+`SimulationSessionStatus`: `IN_PROGRESS` | `COMPLETED` | `ABANDONED`
+
+---
+
+## Shared Schemas
+
+### `Maneuver`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `uuid` | Maneuver id |
+| `title` | `string` | Maneuver title |
+| `description` | `string` | Learning description |
+| `licenseCategory` | `LicenseCategory` | License category |
+| `displayOrder` | `number` | Ordering within category |
+| `checkpoints` | `ManeuverCheckpoint[]` | Ordered checkpoint list |
+
+### `ManeuverCheckpoint`
+
+```json
+{
+  "id": "20423b6d-00d7-4d23-a1d4-189c39185e9d",
+  "title": "Chuẩn bị trước vạch xuất phát",
+  "instruction": "Dừng xe đúng vị trí, kiểm tra gương và tín hiệu trước khi khởi hành.",
+  "penalty": "Trừ điểm nếu xe cán vạch hoặc không bật tín hiệu đúng thời điểm.",
+  "displayOrder": 1
+}
+```
+
+### `ManeuverError`
+
+```json
+{
+  "id": "12f7d0e7-c010-4e49-bcda-036219772cce",
+  "licenseCategory": "B1",
+  "code": "B1-SA-HINH-001",
+  "description": "Không thắt dây an toàn trước khi xuất phát.",
+  "severity": "MAJOR"
+}
+```
+
+### `SimulationSession`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `uuid` | Session id |
+| `studentId` | `uuid` | Student id from JWT `sub` |
+| `licenseCategory` | `LicenseCategory` | Session category |
+| `status` | `SimulationSessionStatus` | Current session state |
+| `totalScenarios` | `number` | Number of answered scenarios at submit time |
+| `correctCount` | `number` | Number of correct answers at submit time |
+| `score` | `number | null` | Rounded percentage score after submit |
+| `isPassed` | `boolean | null` | `true` when score is at least 80 |
+| `startedAt` | `string` | Start timestamp |
+| `completedAt` | `string | null` | Submit timestamp |
+
+---
+
+## Endpoints
+
+### GET `/simulation/maneuvers`
+
+Returns active maneuver checkpoint groups for a license category, ordered by `displayOrder`.
+
+**Auth:** `STUDENT`, `INSTRUCTOR`, `ADMIN`, `CENTER_MANAGER`
+
+**Query Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `licenseCategory` | `LicenseCategory` | yes | License category to load |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/maneuvers?licenseCategory=B1",
+  "data": [
+    {
+      "id": "1e2fe09b-a746-42ce-b592-fb8800512d33",
+      "title": "Xuất phát",
+      "description": "Thực hành quy trình xuất phát đúng kỹ thuật trong bài sa hình.",
+      "licenseCategory": "B1",
+      "displayOrder": 1,
+      "checkpoints": [
+        {
+          "id": "20423b6d-00d7-4d23-a1d4-189c39185e9d",
+          "title": "Chuẩn bị trước vạch xuất phát",
+          "instruction": "Dừng xe đúng vị trí, kiểm tra gương và tín hiệu trước khi khởi hành.",
+          "penalty": "Trừ điểm nếu xe cán vạch hoặc không bật tín hiệu đúng thời điểm.",
+          "displayOrder": 1
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Common errors:** `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `INTERNAL_ERROR`.
+
+---
+
+### GET `/simulation/maneuvers/:id`
+
+Returns one active maneuver with ordered checkpoints.
+
+**Auth:** `STUDENT`, `INSTRUCTOR`, `ADMIN`, `CENTER_MANAGER`
+
+**Path Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uuid` | yes | Maneuver id |
+
+**Response `200`**
+
+Same `Maneuver` shape as list item.
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/maneuvers/1e2fe09b-a746-42ce-b592-fb8800512d33",
+  "data": {
+    "id": "1e2fe09b-a746-42ce-b592-fb8800512d33",
+    "title": "Xuất phát",
+    "description": "Thực hành quy trình xuất phát đúng kỹ thuật trong bài sa hình.",
+    "licenseCategory": "B1",
+    "displayOrder": 1,
+    "checkpoints": []
+  }
+}
+```
+
+**Common errors:** `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_ERROR`.
+
+---
+
+### GET `/simulation/maneuver-errors`
+
+Returns general maneuver errors for a license category. The response is cached by `licenseCategory`.
+
+**Auth:** `STUDENT`, `INSTRUCTOR`, `ADMIN`, `CENTER_MANAGER`
+
+**Query Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `licenseCategory` | `LicenseCategory` | yes | License category to load |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/maneuver-errors?licenseCategory=B1",
+  "data": [
+    {
+      "id": "12f7d0e7-c010-4e49-bcda-036219772cce",
+      "licenseCategory": "B1",
+      "code": "B1-SA-HINH-001",
+      "description": "Không thắt dây an toàn trước khi xuất phát.",
+      "severity": "MAJOR"
+    }
+  ]
+}
+```
+
+**Common errors:** `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `INTERNAL_ERROR`.
+
+---
+
+### POST `/simulation/sessions`
+
+Starts a driving-practice simulation session for the current student. The new session starts in `IN_PROGRESS`.
+
+**Auth:** `STUDENT`
+
+**Body**
+
+```json
+{
+  "licenseCategory": "B1"
+}
+```
+
+**Response `201`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/sessions",
+  "data": {
+    "id": "62d03f43-6245-4bd1-bf6e-675e3695f6d9",
+    "studentId": "89ea9a17-1cce-4fff-855c-d32a081648cd",
+    "licenseCategory": "B1",
+    "status": "IN_PROGRESS",
+    "totalScenarios": 0,
+    "correctCount": 0,
+    "score": null,
+    "isPassed": null,
+    "startedAt": "2026-05-21T10:00:00.000Z",
+    "completedAt": null
+  }
+}
+```
+
+**Common errors:** `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `INTERNAL_ERROR`.
+
+---
+
+### PATCH `/simulation/sessions/:id/answers`
+
+Saves or updates one scenario answer while the session is `IN_PROGRESS`. The session must belong to the current student.
+
+For the current demo scope, `isCorrect` is accepted from the caller and persisted with the answer. A later production hardening step should calculate correctness server-side from seeded scenario/options data.
+
+**Auth:** `STUDENT`
+
+**Path Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uuid` | yes | Simulation session id |
+
+**Body**
+
+```json
+{
+  "scenarioId": "83c1f15e-d15c-4ae8-a6c7-4d2207bbf422",
+  "selectedOptionId": "turn-signal-before-start",
+  "isCorrect": true
+}
+```
+
+**Validation**
+
+| Field | Required | Rule |
+| --- | --- | --- |
+| `scenarioId` | yes | UUID |
+| `selectedOptionId` | no | string or null |
+| `isCorrect` | no | boolean or null |
+
+**Response `200`**
+
+Returns the current session state. Score fields remain unchanged until submit.
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:02:00.000Z",
+  "path": "/simulation/sessions/62d03f43-6245-4bd1-bf6e-675e3695f6d9/answers",
+  "data": {
+    "id": "62d03f43-6245-4bd1-bf6e-675e3695f6d9",
+    "studentId": "89ea9a17-1cce-4fff-855c-d32a081648cd",
+    "licenseCategory": "B1",
+    "status": "IN_PROGRESS",
+    "totalScenarios": 0,
+    "correctCount": 0,
+    "score": null,
+    "isPassed": null,
+    "startedAt": "2026-05-21T10:00:00.000Z",
+    "completedAt": null
+  }
+}
+```
+
+**Common errors:** `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `BAD_REQUEST`, `INTERNAL_ERROR`.
+
+---
+
+### POST `/simulation/sessions/:id/submit`
+
+Finalizes the session. The repository counts saved answers, calculates `score = round(correctCount / totalScenarios * 100)`, marks the session `COMPLETED`, and sets `isPassed = score >= 80`. Re-submitting an already completed session returns the stored final state.
+
+**Auth:** `STUDENT`
+
+**Path Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uuid` | yes | Simulation session id |
+
+**Response `200` or `201`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:05:00.000Z",
+  "path": "/simulation/sessions/62d03f43-6245-4bd1-bf6e-675e3695f6d9/submit",
+  "data": {
+    "id": "62d03f43-6245-4bd1-bf6e-675e3695f6d9",
+    "studentId": "89ea9a17-1cce-4fff-855c-d32a081648cd",
+    "licenseCategory": "B1",
+    "status": "COMPLETED",
+    "totalScenarios": 5,
+    "correctCount": 4,
+    "score": 80,
+    "isPassed": true,
+    "startedAt": "2026-05-21T10:00:00.000Z",
+    "completedAt": "2026-05-21T10:05:00.000Z"
+  }
+}
+```
+
+**Common errors:** `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_ERROR`.
+
+---
+
+## Data Requirement
+
+The API depends on seeded maneuver content:
+
+- `maneuvers`
+- `maneuver_checkpoints`
+- `maneuver_errors`
+
+Without seed data, `GET /simulation/maneuvers` and `GET /simulation/maneuver-errors` correctly return empty arrays. Add a simulation seed script before frontend demo so the UI has enough maneuver/checkpoint content after running root `npm run db:seed`.

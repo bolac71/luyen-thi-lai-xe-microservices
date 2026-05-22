@@ -987,3 +987,29 @@ echo "✓ Lesson 2 completed: $FINAL"  # → {progress:100, status:"COMPLETED"}
 echo ""
 echo "All checks passed!"
 ```
+## ASR: Reset Progress And Archive Course
+
+### Reset Learning Progress
+
+```http
+POST http://localhost:3004/enrollments/{enrollmentId}/reset-progress
+Authorization: Bearer <student_token>
+x-user-id: <studentId>
+```
+
+Expected:
+
+- enrollment `progress = 0`
+- enrollment `status = ACTIVE`
+- `completedAt = null`
+- exam history remains unchanged in `exam-service`
+- `analytics-service` receives `course.enrollment.progress-reset`
+
+### Archive Course
+
+```http
+DELETE http://localhost:3004/admin/courses/{courseId}
+Authorization: Bearer <admin_token>
+```
+
+Expected: course status becomes `ARCHIVED`; normal list endpoints no longer return it unless explicitly filtered.

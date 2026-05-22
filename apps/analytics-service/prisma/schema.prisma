@@ -1,0 +1,57 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../../node_modules/@prisma/analytics-client"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model StudentLearningProfile {
+  id                String    @id
+  studentId         String    @unique
+  totalStudyMinutes Int       @default(0)
+  totalExamAttempts Int       @default(0)
+  passedExams       Int       @default(0)
+  avgExamScore      Float     @default(0)
+  coursesEnrolled   Int       @default(0)
+  coursesCompleted  Int       @default(0)
+  lastActivityAt    DateTime?
+  resetAt           DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("student_learning_profiles")
+}
+
+model DailyActivity {
+  id                String   @id @default(uuid())
+  studentId         String
+  date              DateTime @db.Date
+  studyMinutes      Int      @default(0)
+  questionsAnswered Int      @default(0)
+  correctAnswers    Int      @default(0)
+  examsAttempted    Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([studentId, date])
+  @@index([studentId, date])
+  @@map("daily_activities")
+}
+
+model QuestionAccuracyTracker {
+  id              String   @id @default(uuid())
+  studentId       String
+  questionId      String
+  topicId         String?
+  topicName       String?
+  totalAttempts   Int      @default(0)
+  correctAttempts Int      @default(0)
+  lastAttemptAt   DateTime @default(now())
+
+  @@unique([studentId, questionId])
+  @@index([studentId, lastAttemptAt])
+  @@map("question_accuracy_trackers")
+}

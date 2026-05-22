@@ -22,6 +22,10 @@ Thứ tự demo khuyến nghị trong 15-20 phút:
 | 7 | Kill-question logic | `ASR-DI-02` | Sai câu critical thì `failedByCritical=true` |
 | 8 | Bounded pagination/index | `ASR-PERF-02`, `ASR-PERF-03`, `ASR-PERF-10`, `ASR-PERF-11` | `size=1000` bị reject, list có page/size |
 | 9 | Redis cache-aside | `ASR-PERF-05` | Có Redis key, TTL, invalidate, fallback DB khi Redis down |
+| 10 | Learning analytics dashboard | `ASR-PERF-04`, `ASR-PERF-07` | `analytics-service` projection trả progress từ cache/read model |
+| 11 | Admin exam history and missed review | `ASR-PERF-09`, `ASR-PERF-10` | Filter history theo student/date/result; missed review không lộ đáp án |
+| 12 | Progress reset and academic warning | `ASR-REL-05`, `ASR-PERF-08` | Reset giữ lịch sử; warning tạo notification async |
+| 13 | Maneuver simulation backend rules | `ASR-SEC-07`, `ASR-UX-02` | Backend reject state transition sai và cache maneuver errors |
 
 Nếu thời gian demo ngắn, ưu tiên các mục 1, 3, 4, 5, 8, 9.
 
@@ -146,6 +150,14 @@ Nếu course-service có thêm read model license tier, cũng apply migration:
 - `apps/course-service/prisma/migrations/20260521090000_add_student_license_profile_read_model`
 
 ## 6. Seed Data
+
+Khuyến nghị hiện tại cho demo đầy đủ là chạy root seed một lần sau migration:
+
+```powershell
+npm.cmd run db:seed
+```
+
+Lệnh này seed theo thứ tự phụ thuộc: identity, user, question, exam, course, analytics, notification, simulation. Dataset gồm demo users/license, 600 câu hỏi, exam templates, courses/enrollments, analytics read model, notifications và simulation maneuvers/checkpoints/errors. Chi tiết nằm ở `guides/testing/demo-seed-plan.md`.
 
 ### 6.1 Seed Question Topics/Question Bank
 

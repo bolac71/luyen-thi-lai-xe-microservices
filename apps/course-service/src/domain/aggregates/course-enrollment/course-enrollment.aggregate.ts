@@ -1,5 +1,6 @@
 import { AggregateRoot } from '@repo/common';
 import { CourseEnrollmentCompletedEvent } from '../../events/course-enrollment-completed.event';
+import { CourseEnrollmentProgressResetEvent } from '../../events/course-enrollment-progress-reset.event';
 import { CourseLessonCompletedEvent } from '../../events/course-lesson-completed.event';
 import { EnrollmentAlreadyCompletedException } from '../../exceptions/enrollment-already-completed.exception';
 import {
@@ -89,6 +90,19 @@ export class CourseEnrollment extends AggregateRoot<string> {
 
   drop(): void {
     this._status = EnrollmentStatus.DROPPED;
+  }
+
+  resetProgress(): void {
+    this._status = EnrollmentStatus.ACTIVE;
+    this._progress = 0;
+    this._completedAt = null;
+    this.addDomainEvent(
+      new CourseEnrollmentProgressResetEvent(
+        this._id,
+        this._studentId,
+        this._courseId,
+      ),
+    );
   }
 
   get courseId(): string {

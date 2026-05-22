@@ -840,3 +840,22 @@ Course-service lưu event này vào read model `student_license_profiles` để 
   "courseId": "course-uuid"
 }
 ```
+## ASR Additions: Course Archive And Progress Reset
+
+### DELETE `/admin/courses/{id}`
+
+Archives a course instead of hard deleting it. Archived courses are excluded from list endpoints unless explicitly filtered by status.
+
+Response contains the archived course with `status = "ARCHIVED"`.
+
+### POST `/enrollments/{id}/reset-progress`
+
+Role: `STUDENT`.
+
+Resets only the current student's enrollment progress to baseline:
+
+- `progress = 0`
+- `status = ACTIVE`
+- `completedAt = null`
+- historical exam sessions are preserved
+- publishes `course.enrollment.progress-reset` for analytics invalidation

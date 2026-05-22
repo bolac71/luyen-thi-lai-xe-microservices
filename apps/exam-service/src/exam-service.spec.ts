@@ -287,6 +287,7 @@ describe('Exam use cases', () => {
     sessionRepository = {
       findById: jest.fn(),
       findAll: jest.fn(),
+      findMissedQuestions: jest.fn(),
       save: jest.fn(),
     };
     questionPoolClient = { getPool: jest.fn() };
