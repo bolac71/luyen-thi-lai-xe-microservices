@@ -8,6 +8,7 @@
     "format": "biome format --write .",
     "check": "biome check --write .",
     "check-types": "turbo run check-types",
+    "db:generate": "turbo run db:generate",
     "db:migrate": "tsx scripts/prisma-migrate-all.ts dev",
     "db:deploy": "tsx scripts/prisma-migrate-all.ts deploy",
     "db:seed": "tsx scripts/prisma-seed-all.ts",

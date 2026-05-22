@@ -33,7 +33,82 @@ kong/
 docker-compose.yaml
 ```
 
-## 3. Chạy full stack bằng Docker (khuyến nghị)
+## 3. First Run Cho Dev/Frontend Clone Repo Lần Đầu
+
+Khuyến nghị cho frontend/dev mới kéo repo: chạy backend ở **hybrid mode**: infra bằng Docker, service NestJS chạy local. Cách này dễ debug hơn full Docker và ít gặp lỗi build image.
+
+Yêu cầu:
+
+- Docker Desktop đang chạy.
+- Node.js >= 18.
+- npm. Trên Windows nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd`.
+
+Từ root repo, chạy theo đúng thứ tự:
+
+```powershell
+# 1. Cài dependencies
+npm.cmd install
+
+# 2. Bật infra: Postgres, Redis, RabbitMQ, Consul, Keycloak, Kong
+npm.cmd run infra:up
+
+# 3. Seed Consul config cho local mode
+npm.cmd run consul:seed:local
+
+# 4. Generate Prisma clients cho tất cả service
+npm.cmd run db:generate
+
+# 5. Apply migrations cho tất cả service DB
+npm.cmd run db:deploy
+
+# 6. Seed demo data + demo users vào Keycloak
+npm.cmd run db:seed
+
+# 7. Chạy toàn bộ backend services local
+npm.cmd run dev
+```
+
+Sau khi chạy xong:
+
+- Kong/API Gateway: http://localhost:8000
+- Swagger tổng hợp: http://localhost:3009/docs
+- Keycloak: http://localhost:8080
+- Consul: http://localhost:8500
+- RabbitMQ UI: http://localhost:15672
+- Mailpit: http://localhost:8025
+
+Demo accounts được seed vào Keycloak, password chung:
+
+```text
+123456
+```
+
+Ví dụ login frontend:
+
+- `admin@test.com`
+- `manager@test.com`
+- `instructor.b1@test.com`
+- `student.b1@test.com`
+- `student.b2@test.com`
+
+Frontend chỉ gửi:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Không tự gửi `x-user-id`.
+
+Nếu muốn reset sạch môi trường local:
+
+```powershell
+npm.cmd run infra:down
+docker compose -f docker-compose.infra.yml down -v
+```
+
+Sau đó chạy lại từ bước 2.
+
+## 4. Chạy full stack bằng Docker
 
 Yêu cầu:
 
@@ -58,7 +133,7 @@ Stop:
 docker compose down
 ```
 
-## 4. Consul Configuration Management
+## 5. Consul Configuration Management
 
 Tất cả microservices sử dụng **Consul** để quản lý configuration tập trung.
 
@@ -95,7 +170,7 @@ npm run consul:list /config/development
 npm run consul:get /config/development/identity-service/database.url
 ```
 
-## 5. Route qua gateway
+## 6. Route qua gateway
 
 - /auth -> identity-service
 - /users -> user-service
@@ -106,7 +181,7 @@ npm run consul:get /config/development/identity-service/database.url
 - /analytics -> analytics-service
 - /simulation -> simulation-service
 
-## 6. Chạy local để code/debug
+## 7. Chạy local để code/debug
 
 Yêu cầu:
 
@@ -176,7 +251,7 @@ docker compose run --rm identity-service npm run db:seed -w identity-service
 
 Demo accounts được seed vào Keycloak và các service DB dùng chung password `123456`.
 
-## 7. Cách tạo service mới
+## 8. Cách tạo service mới
 
 Ví dụ service mới: payment-service
 

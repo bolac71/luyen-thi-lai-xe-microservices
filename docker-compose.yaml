@@ -18,7 +18,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d identity_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho User Service (Quản lý profile, thông tin người dùng)
   db-user:
@@ -35,7 +36,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d user_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Exam Service (Quản lý các kỳ thi, kết quả thi)
   db-exam:
@@ -52,7 +54,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d exam_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Course Service (Quản lý khóa học, bài học)
   db-course:
@@ -69,7 +72,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d course_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Question Service (Quản lý ngân hàng câu hỏi)
   db-question:
@@ -86,7 +90,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d question_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Notification Service (Lưu lịch sử thông báo)
   db-notification:
@@ -103,7 +108,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d notification_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Analytics Service (Thống kê, báo cáo dữ liệu)
   db-analytics:
@@ -120,7 +126,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d analytics_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Simulation Service (Mô phỏng các tình huống lái xe)
   db-simulation:
@@ -137,7 +144,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d simulation_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Database cho Media Service (Metadata của file lưu trên R2)
   db-media:
@@ -154,7 +162,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d media_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # ========================================================
   # 2. MESSAGE BROKER (Giao tiếp liên dịch vụ)
@@ -363,6 +372,10 @@ services:
       - DATABASE_URL=postgresql://user:password@db-notification:5432/notification_db
       - CONSUL_URL=http://consul:8500
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - KEYCLOAK_AUTH_SERVER_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
+      - KEYCLOAK_CLIENT_ID=nestjs-backend
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
     ports:
       - "3006:3000"
     depends_on:
@@ -383,6 +396,11 @@ services:
       - DATABASE_URL=postgresql://user:password@db-analytics:5432/analytics_db
       - CONSUL_URL=http://consul:8500
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+      - KEYCLOAK_AUTH_SERVER_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
+      - KEYCLOAK_CLIENT_ID=nestjs-backend
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
     ports:
       - "3007:3000"
     depends_on:
@@ -394,6 +412,8 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
   simulation-service:
     build:
       context: .
@@ -402,6 +422,11 @@ services:
       - DATABASE_URL=postgresql://user:password@db-simulation:5432/simulation_db
       - CONSUL_URL=http://consul:8500
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+      - KEYCLOAK_AUTH_SERVER_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
+      - KEYCLOAK_CLIENT_ID=nestjs-backend
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
     ports:
       - "3008:3000"
     depends_on:
@@ -412,6 +437,8 @@ services:
       consul-init:
         condition: service_completed_successfully
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   media-service:
@@ -508,7 +535,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   # Keycloak Service
   keycloak:
