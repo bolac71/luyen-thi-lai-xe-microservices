@@ -116,7 +116,7 @@ services:
     routes:
       - name: simulation-route
         paths:
-          - /simulations
+          - /simulation
         strip_path: false
       - name: simulation-swagger-route
         paths:
@@ -171,6 +171,6 @@ plugins:
       max_age: 3600
   - name: rate-limiting
     config:
-      second: 5
+      second: 100
       hour: 1000
       policy: local

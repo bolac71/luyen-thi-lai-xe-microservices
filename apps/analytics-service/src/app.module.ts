@@ -34,7 +34,16 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     AppLoggerModule,
     HealthModule.register({
       serviceName: 'analytics-service',
-      dependencies: [{ name: 'rabbitmq', configKey: 'rabbitmq.url' }],
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        { name: 'redis', configKey: 'redis.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
     }),
     ConfigModule.forRoot({
       load: [

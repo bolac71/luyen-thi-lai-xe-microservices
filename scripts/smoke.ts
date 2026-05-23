@@ -2,21 +2,23 @@ import axios from 'axios';
 
 type RouteCheck = {
   name: string;
-  basePath: string;
+  routePrefix: string;
 };
 
 const gatewayUrl = process.env.SMOKE_GATEWAY_URL ?? 'http://localhost:8000';
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS ?? '3000');
+const delayMs = Number(process.env.SMOKE_DELAY_MS ?? '300');
 
 const checks: RouteCheck[] = [
-  { name: 'identity-service', basePath: '/auth' },
-  { name: 'user-service', basePath: '/users' },
-  { name: 'exam-service', basePath: '/exams' },
-  { name: 'course-service', basePath: '/courses' },
-  { name: 'question-service', basePath: '/questions' },
-  { name: 'notification-service', basePath: '/notifications' },
-  { name: 'analytics-service', basePath: '/analytics' },
-  { name: 'simulation-service', basePath: '/simulations' },
+  { name: 'identity-service', routePrefix: '/identity-service' },
+  { name: 'user-service', routePrefix: '/user-service' },
+  { name: 'exam-service', routePrefix: '/exam-service' },
+  { name: 'course-service', routePrefix: '/course-service' },
+  { name: 'question-service', routePrefix: '/question-service' },
+  { name: 'notification-service', routePrefix: '/notification-service' },
+  { name: 'analytics-service', routePrefix: '/analytics-service' },
+  { name: 'simulation-service', routePrefix: '/simulation-service' },
+  { name: 'media-service', routePrefix: '/media-service' },
 ];
 
 async function main(): Promise<void> {
@@ -24,7 +26,7 @@ async function main(): Promise<void> {
 
   for (const check of checks) {
     for (const suffix of ['health/live', 'health/ready']) {
-      const url = `${gatewayUrl}${check.basePath}/${suffix}`;
+      const url = `${gatewayUrl}${check.routePrefix}/${suffix}`;
 
       try {
         const response = await axios.get(url, {
@@ -41,7 +43,7 @@ async function main(): Promise<void> {
             : true;
 
         if (!ok || !success) {
-          failures.push(`${check.name} ${suffix} -> HTTP ${response.status}`);
+          failures.push(`${check.name} ${url} -> HTTP ${response.status}`);
           continue;
         }
 
@@ -54,6 +56,8 @@ async function main(): Promise<void> {
             : String(error);
         failures.push(`${check.name} ${suffix} -> ${message}`);
       }
+
+      await sleep(delayMs);
     }
   }
 
@@ -67,6 +71,14 @@ async function main(): Promise<void> {
   }
 
   console.log('[smoke] All health checks passed.');
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 void main();

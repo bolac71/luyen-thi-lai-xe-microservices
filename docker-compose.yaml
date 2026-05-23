@@ -254,6 +254,7 @@ services:
       - LOGSTASH_HOST=logstash
     ports:
       - "3001:3000"
+    restart: unless-stopped
     depends_on:
       db-identity:
         condition: service_healthy
@@ -265,6 +266,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   user-service:
     build:
@@ -282,6 +289,7 @@ services:
       - LOGSTASH_HOST=logstash
     ports:
       - "3002:3000"
+    restart: unless-stopped
     depends_on:
       db-user:
         condition: service_healthy
@@ -291,6 +299,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   exam-service:
     build:
@@ -309,6 +323,7 @@ services:
       - LOGSTASH_HOST=logstash
     ports:
       - "3003:3000"
+    restart: unless-stopped
     depends_on:
       db-exam:
         condition: service_healthy
@@ -318,6 +333,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   course-service:
     build:
@@ -334,6 +355,7 @@ services:
       - LOGSTASH_HOST=logstash
     ports:
       - "3004:3000"
+    restart: unless-stopped
     depends_on:
       db-course:
         condition: service_healthy
@@ -343,6 +365,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   question-service:
     build:
@@ -359,6 +387,7 @@ services:
       - LOGSTASH_HOST=logstash
     ports:
       - "3005:3000"
+    restart: unless-stopped
     depends_on:
       db-question:
         condition: service_healthy
@@ -368,6 +397,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   notification-service:
     build:
@@ -383,6 +418,7 @@ services:
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
     ports:
       - "3006:3000"
+    restart: unless-stopped
     depends_on:
       db-notification:
         condition: service_healthy
@@ -392,6 +428,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   analytics-service:
     build:
@@ -408,6 +450,7 @@ services:
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
     ports:
       - "3007:3000"
+    restart: unless-stopped
     depends_on:
       db-analytics:
         condition: service_healthy
@@ -419,6 +462,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
   simulation-service:
     build:
       context: .
@@ -434,6 +483,7 @@ services:
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
     ports:
       - "3008:3000"
+    restart: unless-stopped
     depends_on:
       db-simulation:
         condition: service_healthy
@@ -445,6 +495,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   media-service:
     build:
@@ -465,6 +521,7 @@ services:
       - LOGSTASH_HOST=logstash
     ports:
       - "3010:3000"
+    restart: unless-stopped
     depends_on:
       db-media:
         condition: service_healthy
@@ -474,6 +531,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   # ========================================================
   # 4. API GATEWAY (KONG)
