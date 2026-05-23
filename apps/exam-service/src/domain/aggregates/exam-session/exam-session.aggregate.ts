@@ -35,18 +35,28 @@ export class ExamSession extends AggregateRoot<string> {
     id: string,
     readonly studentId: string,
     readonly templateId: string,
+    readonly templateNameSnapshot: string,
+    readonly templateVersionSnapshot: number,
     readonly licenseCategory: LicenseCategory,
+    readonly totalQuestionsSnapshot: number,
     readonly passingScore: number,
     readonly durationMinutes: number,
+    readonly criticalQuestionsSnapshot: number,
+    readonly topicDistributionSnapshot: unknown,
     readonly maxCriticalMistakes: number,
     props: Omit<
       ReconstituteExamSessionProps,
       | 'id'
       | 'studentId'
       | 'templateId'
+      | 'templateNameSnapshot'
+      | 'templateVersionSnapshot'
       | 'licenseCategory'
+      | 'totalQuestionsSnapshot'
       | 'passingScore'
       | 'durationMinutes'
+      | 'criticalQuestionsSnapshot'
+      | 'topicDistributionSnapshot'
       | 'maxCriticalMistakes'
     >,
   ) {
@@ -77,9 +87,14 @@ export class ExamSession extends AggregateRoot<string> {
       crypto.randomUUID(),
       props.studentId,
       props.templateId,
+      props.templateNameSnapshot ?? '',
+      props.templateVersionSnapshot ?? 1,
       props.licenseCategory,
+      props.totalQuestionsSnapshot ?? props.questions.length,
       props.passingScore,
       props.durationMinutes,
+      props.criticalQuestionsSnapshot ?? 0,
+      props.topicDistributionSnapshot ?? [],
       props.maxCriticalMistakes,
       {
         status: ExamSessionStatus.IN_PROGRESS,
@@ -102,9 +117,14 @@ export class ExamSession extends AggregateRoot<string> {
       props.id,
       props.studentId,
       props.templateId,
+      props.templateNameSnapshot ?? '',
+      props.templateVersionSnapshot ?? 1,
       props.licenseCategory,
+      props.totalQuestionsSnapshot ?? props.questions.length,
       props.passingScore,
       props.durationMinutes,
+      props.criticalQuestionsSnapshot ?? 0,
+      props.topicDistributionSnapshot ?? [],
       props.maxCriticalMistakes,
       props,
     );
@@ -126,6 +146,13 @@ export class ExamSession extends AggregateRoot<string> {
     if (selectedOptionId !== undefined) question.answer(selectedOptionId);
     if (isBookmarked !== undefined) question.setBookmarked(isBookmarked);
     this.touch();
+  }
+
+  expireIfNeeded(now = new Date()): boolean {
+    if (this._status !== ExamSessionStatus.IN_PROGRESS) return false;
+    if (now <= this._expiresAt) return false;
+    this.grade(ExamSessionStatus.TIMED_OUT, now);
+    return true;
   }
 
   submit(now = new Date()): void {
@@ -185,6 +212,10 @@ export class ExamSession extends AggregateRoot<string> {
         score,
         this._isPassed,
         this.licenseCategory,
+        this._questions.map((question) => ({
+          questionId: question.questionId,
+          isCorrect: question.isCorrect,
+        })),
       ),
     );
     if (this._isPassed) {

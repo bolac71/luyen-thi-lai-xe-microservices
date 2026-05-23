@@ -32,9 +32,14 @@ export interface ExamQuestionSnapshot {
 export interface CreateExamSessionProps {
   studentId: string;
   templateId: string;
+  templateNameSnapshot?: string;
+  templateVersionSnapshot?: number;
   licenseCategory: LicenseCategory;
+  totalQuestionsSnapshot?: number;
   passingScore: number;
   durationMinutes: number;
+  criticalQuestionsSnapshot?: number;
+  topicDistributionSnapshot?: unknown;
   maxCriticalMistakes: number;
   questions: ExamQuestionSnapshot[];
 }

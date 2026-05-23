@@ -5,6 +5,7 @@ import { ExamSessionRepository } from '../../../domain/repositories/exam-session
 import { EventPublisher } from '../../ports/event-publisher.port';
 import { ExamSessionResult } from '../shared/exam-session.result';
 import { SubmitSessionCommand } from './submit-session.command';
+import { ExamSessionStatus } from '../../../domain/aggregates/exam-session/exam-session.types';
 
 @Injectable()
 export class SubmitSessionUseCase
@@ -19,6 +20,10 @@ export class SubmitSessionUseCase
     const session = await this.sessionRepository.findById(command.sessionId);
     if (!session) throw new ExamSessionNotFoundException(command.sessionId);
     session.assertOwner(command.studentId);
+    if (session.status !== ExamSessionStatus.IN_PROGRESS) {
+      return ExamSessionResult.fromAggregate(session, true);
+    }
+
     session.submit();
     await this.sessionRepository.save(session);
     const events = session.getDomainEvents();

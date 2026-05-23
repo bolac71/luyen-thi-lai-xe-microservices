@@ -6,9 +6,14 @@ import {
 import { LicenseCategory } from '../../../domain/aggregates/exam-template/exam-template.types';
 
 interface RawTemplateForSession {
+  name?: string;
   licenseCategory: string;
+  totalQuestions?: number;
   passingScore: number;
   durationMinutes: number;
+  criticalQuestions?: number;
+  topicDistribution?: unknown;
+  version?: number;
   maxCriticalMistakes: number;
 }
 
@@ -32,6 +37,14 @@ export interface RawExamSession {
   id: string;
   studentId: string;
   templateId: string;
+  templateNameSnapshot?: string;
+  templateVersionSnapshot?: number;
+  licenseCategorySnapshot?: string;
+  totalQuestionsSnapshot?: number;
+  passingScoreSnapshot?: number;
+  durationMinutesSnapshot?: number;
+  criticalQuestionsSnapshot?: number;
+  topicDistributionSnapshot?: unknown;
   status: string;
   score: number | null;
   isPassed: boolean | null;
@@ -53,9 +66,22 @@ export class ExamSessionMapper {
       id: raw.id,
       studentId: raw.studentId,
       templateId: raw.templateId,
-      licenseCategory: raw.template.licenseCategory as LicenseCategory,
-      passingScore: raw.template.passingScore,
-      durationMinutes: raw.template.durationMinutes,
+      templateNameSnapshot: raw.templateNameSnapshot ?? raw.template.name ?? '',
+      templateVersionSnapshot:
+        raw.templateVersionSnapshot ?? raw.template.version ?? 1,
+      licenseCategory: (raw.licenseCategorySnapshot ??
+        raw.template.licenseCategory) as LicenseCategory,
+      totalQuestionsSnapshot:
+        raw.totalQuestionsSnapshot ??
+        raw.template.totalQuestions ??
+        raw.questions.length,
+      passingScore: raw.passingScoreSnapshot ?? raw.template.passingScore,
+      durationMinutes:
+        raw.durationMinutesSnapshot ?? raw.template.durationMinutes,
+      criticalQuestionsSnapshot:
+        raw.criticalQuestionsSnapshot ?? raw.template.criticalQuestions ?? 0,
+      topicDistributionSnapshot:
+        raw.topicDistributionSnapshot ?? raw.template.topicDistribution ?? [],
       maxCriticalMistakes: raw.maxCriticalMistakes,
       status: raw.status as ExamSessionStatus,
       score: raw.score,

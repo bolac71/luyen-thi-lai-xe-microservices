@@ -1,0 +1,45 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../../node_modules/@prisma/notification-client"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum NotificationType {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType @default(IN_APP)
+  title     String           @db.Text
+  body      String           @db.Text
+  data      Json             @default("{}")
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  sentAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model AcademicWarning {
+  id          String   @id @default(uuid())
+  studentId   String
+  reason      String   @db.Text
+  severity    String
+  message     String   @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([studentId, createdAt])
+  @@map("academic_warnings")
+}

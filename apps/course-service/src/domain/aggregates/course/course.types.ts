@@ -12,6 +12,7 @@ export enum LicenseCategory {
 export enum CourseStatus {
   DRAFT = 'DRAFT',
   ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED',
 }
 
 export interface CreateCourseProps {

@@ -21,6 +21,9 @@ export class ListSessionsUseCase
       page,
       size,
       status: query.status,
+      isPassed: query.isPassed,
+      from: query.from,
+      to: query.to,
     });
     return new ListExamSessionsResult(
       result.items.map((session) =>

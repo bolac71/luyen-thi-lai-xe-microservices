@@ -13,6 +13,7 @@ import { UpdateUserProfileUseCase } from './application/use-cases/update-user-pr
 import { UserProfileRepository } from './domain/repositories/user-profile.repository';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
 import {
+  COURSE_SERVICE_CLIENT,
   MEDIA_SERVICE_CLIENT,
   RABBITMQ_CLIENT,
   RabbitMqEventPublisher,
@@ -50,6 +51,20 @@ import { MessagingController } from './presentation/messaging/messaging.controll
               config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
             ],
             queue: 'media_service_events',
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+      {
+        name: COURSE_SERVICE_CLIENT,
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [
+              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
+            ],
+            queue: 'course_service_events',
             queueOptions: { durable: true },
           },
         }),

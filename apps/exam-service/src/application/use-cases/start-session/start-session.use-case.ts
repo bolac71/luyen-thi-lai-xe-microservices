@@ -75,9 +75,14 @@ export class StartSessionUseCase
     const session = ExamSession.create({
       studentId: command.studentId,
       templateId: template.id,
+      templateNameSnapshot: template.name,
+      templateVersionSnapshot: template.version,
       licenseCategory: template.licenseCategory,
+      totalQuestionsSnapshot: template.totalQuestions,
       passingScore: template.passingScore,
       durationMinutes: template.durationMinutes,
+      criticalQuestionsSnapshot: template.criticalQuestions,
+      topicDistributionSnapshot: template.topicDistribution,
       maxCriticalMistakes: template.maxCriticalMistakes,
       questions: questions
         .slice(0, template.totalQuestions)
@@ -91,15 +96,18 @@ export class StartSessionUseCase
               index,
             );
           }
+          const options = template.shuffleQuestions
+            ? this.shuffle(question.options)
+            : question.options;
           return {
             questionId: question.id,
             questionContent: question.content,
             imageUrl: question.imageUrl,
             mediaFileId: question.mediaFileId,
-            optionsSnapshot: question.options.map((option) => ({
+            optionsSnapshot: options.map((option, optionIndex) => ({
               id: option.id,
               content: option.content,
-              displayOrder: option.displayOrder,
+              displayOrder: optionIndex + 1,
             })),
             correctOptionId: correctOption.id,
             isCritical: question.isCritical,

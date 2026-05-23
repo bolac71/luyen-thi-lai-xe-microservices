@@ -1,12 +1,15 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { Public } from 'nest-keycloak-connect';
+import { SyncStudentLicenseCommand } from '../../application/use-cases/sync-student-license/sync-student-license.command';
+import { SyncStudentLicenseUseCase } from '../../application/use-cases/sync-student-license/sync-student-license.use-case';
+import { LicenseCategory } from '../../domain/aggregates/course/course.types';
 import { PrismaService } from '../../infrastructure/persistence/prisma/prisma.service';
 
 interface StudentLicenseAssignedPayload {
   studentId: string;
-  newTier: string;
-  oldTier: string | null;
+  newLicenseTier: LicenseCategory;
+  oldLicenseTier: LicenseCategory | null;
 }
 
 interface MediaFileDeletedPayload {
@@ -20,14 +23,24 @@ interface MediaFileDeletedPayload {
 export class MessagingController {
   private readonly logger = new Logger(MessagingController.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly syncStudentLicenseUseCase: SyncStudentLicenseUseCase,
+  ) {}
 
   @EventPattern('user.student.license-assigned')
-  handleStudentLicenseAssigned(
+  async handleStudentLicenseAssigned(
     @Payload() payload: StudentLicenseAssignedPayload,
-  ): void {
+  ): Promise<void> {
     this.logger.log(
-      `Received user.student.license-assigned for studentId=${payload.studentId}, newTier=${payload.newTier}`,
+      `Received user.student.license-assigned for studentId=${payload.studentId}, newLicenseTier=${payload.newLicenseTier}`,
+    );
+    await this.syncStudentLicenseUseCase.execute(
+      new SyncStudentLicenseCommand(
+        payload.studentId,
+        payload.newLicenseTier,
+        new Date(),
+      ),
     );
   }
 

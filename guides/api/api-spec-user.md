@@ -482,11 +482,30 @@ Gán hạng giấy phép cho học viên và ghi audit trail. `changedById = JWT
 }
 ```
 
-**Response `204 No Content`**
+**Response `200 OK`**
 
-Không có body.
+Trả về profile đã cập nhật để Swagger UI/Postman thấy rõ kết quả thành công.
 
-**Event published:** `user.student.license-assigned`.
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "data": {
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "fullName": "Nguyễn Văn A",
+    "email": "a@example.com",
+    "role": "STUDENT",
+    "studentDetail": {
+      "licenseTier": "B2",
+      "enrolledAt": "2026-05-14T10:00:00.000Z",
+      "notes": "Ghi chú"
+    }
+  }
+}
+```
+
+**Event published:** `user.student.license-assigned` tới queue `course_service_events` để course-service sync read model license tier trước khi cho enroll.
 
 ```json
 {

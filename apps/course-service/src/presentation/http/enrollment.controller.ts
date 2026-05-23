@@ -16,6 +16,8 @@ import { GetEnrollmentQuery } from '../../application/use-cases/get-enrollment/g
 import { GetEnrollmentUseCase } from '../../application/use-cases/get-enrollment/get-enrollment.use-case';
 import { ListStudentEnrollmentsQuery } from '../../application/use-cases/list-student-enrollments/list-student-enrollments.query';
 import { ListStudentEnrollmentsUseCase } from '../../application/use-cases/list-student-enrollments/list-student-enrollments.use-case';
+import { ResetEnrollmentProgressCommand } from '../../application/use-cases/reset-enrollment-progress/reset-enrollment-progress.command';
+import { ResetEnrollmentProgressUseCase } from '../../application/use-cases/reset-enrollment-progress/reset-enrollment-progress.use-case';
 import {
   EnrollmentResponseDto,
   ListEnrollmentsResponseDto,
@@ -38,6 +40,7 @@ export class EnrollmentController {
     private readonly getEnrollmentUseCase: GetEnrollmentUseCase,
     private readonly listStudentEnrollmentsUseCase: ListStudentEnrollmentsUseCase,
     private readonly completeLessonUseCase: CompleteLessonUseCase,
+    private readonly resetEnrollmentProgressUseCase: ResetEnrollmentProgressUseCase,
   ) {}
 
   @Get()
@@ -79,6 +82,24 @@ export class EnrollmentController {
   ): Promise<EnrollmentResponseDto> {
     const result = await this.completeLessonUseCase.execute(
       new CompleteLessonCommand(enrollmentId, lessonId),
+    );
+    return EnrollmentResponseDto.fromResult(result);
+  }
+
+  @Post(':id/reset-progress')
+  @Roles({ roles: ['realm:STUDENT'] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset current student enrollment progress' })
+  async resetProgress(
+    @AuthenticatedUser() user: JwtPayload,
+    @Headers('x-user-id') headerUserId: string | undefined,
+    @Param('id') enrollmentId: string,
+  ): Promise<EnrollmentResponseDto> {
+    const result = await this.resetEnrollmentProgressUseCase.execute(
+      new ResetEnrollmentProgressCommand(
+        enrollmentId,
+        resolveActorId(user, headerUserId),
+      ),
     );
     return EnrollmentResponseDto.fromResult(result);
   }

@@ -5,6 +5,7 @@ import {
   ExamSessionRepository,
   ListExamSessionsFilter,
   ListExamSessionsPage,
+  MissedQuestionItem,
 } from '../../../domain/repositories/exam-session.repository';
 import { ExamSessionMapper } from '../mappers/exam-session.mapper';
 import { PrismaService } from './prisma.service';
@@ -28,8 +29,15 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
 
   async findAll(filter: ListExamSessionsFilter): Promise<ListExamSessionsPage> {
     const where = {
-      studentId: filter.studentId,
+      ...(filter.studentId && { studentId: filter.studentId }),
       ...(filter.status && { status: filter.status }),
+      ...(filter.isPassed !== undefined && { isPassed: filter.isPassed }),
+      ...((filter.from || filter.to) && {
+        startedAt: {
+          ...(filter.from && { gte: filter.from }),
+          ...(filter.to && { lte: filter.to }),
+        },
+      }),
     };
     const skip = (filter.page - 1) * filter.size;
     const [rawItems, total] = await this.prisma.$transaction([
@@ -48,6 +56,37 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
     return { items: rawItems.map(ExamSessionMapper.toDomain), total };
   }
 
+  async findMissedQuestions(
+    studentId: string,
+    limit: number,
+  ): Promise<MissedQuestionItem[]> {
+    const rows = await this.prisma.examSessionQuestion.findMany({
+      where: {
+        isCorrect: false,
+        session: {
+          studentId,
+          status: { in: ['COMPLETED', 'TIMED_OUT'] },
+        },
+      },
+      orderBy: [{ answeredAt: 'desc' }],
+      distinct: ['questionId'],
+      take: limit,
+    });
+
+    return rows.map((row) => ({
+      questionId: row.questionId,
+      content: row.questionContent,
+      imageUrl: row.imageUrl,
+      mediaFileId: row.mediaFileId,
+      options: row.optionsSnapshot as Array<{
+        id: string;
+        content: string;
+        displayOrder: number;
+      }>,
+      lastAnsweredAt: row.answeredAt,
+    }));
+  }
+
   async save(session: ExamSession): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.examSession.upsert({
@@ -56,6 +95,15 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
           id: session.id,
           studentId: session.studentId,
           templateId: session.templateId,
+          templateNameSnapshot: session.templateNameSnapshot,
+          templateVersionSnapshot: session.templateVersionSnapshot,
+          licenseCategorySnapshot: session.licenseCategory,
+          totalQuestionsSnapshot: session.totalQuestionsSnapshot,
+          passingScoreSnapshot: session.passingScore,
+          durationMinutesSnapshot: session.durationMinutes,
+          criticalQuestionsSnapshot: session.criticalQuestionsSnapshot,
+          topicDistributionSnapshot:
+            session.topicDistributionSnapshot as Prisma.InputJsonValue,
           status: session.status,
           score: session.score,
           isPassed: session.isPassed,
@@ -70,6 +118,15 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
         },
         update: {
           status: session.status,
+          templateNameSnapshot: session.templateNameSnapshot,
+          templateVersionSnapshot: session.templateVersionSnapshot,
+          licenseCategorySnapshot: session.licenseCategory,
+          totalQuestionsSnapshot: session.totalQuestionsSnapshot,
+          passingScoreSnapshot: session.passingScore,
+          durationMinutesSnapshot: session.durationMinutes,
+          criticalQuestionsSnapshot: session.criticalQuestionsSnapshot,
+          topicDistributionSnapshot:
+            session.topicDistributionSnapshot as Prisma.InputJsonValue,
           score: session.score,
           isPassed: session.isPassed,
           failedByCritical: session.failedByCritical,
@@ -80,28 +137,28 @@ export class PrismaExamSessionRepository extends ExamSessionRepository {
         },
       });
 
-      await tx.examSessionQuestion.deleteMany({
-        where: { sessionId: session.id },
-      });
-      if (session.questions.length > 0) {
-        await tx.examSessionQuestion.createMany({
-          data: session.questions.map((question) => ({
-            id: question.id,
-            sessionId: session.id,
-            questionId: question.questionId,
-            questionContent: question.questionContent,
-            imageUrl: question.imageUrl,
-            mediaFileId: question.mediaFileId,
-            optionsSnapshot:
-              question.optionsSnapshot as unknown as Prisma.InputJsonValue,
-            correctOptionId: question.correctOptionId,
-            isCritical: question.isCritical,
-            displayOrder: question.displayOrder,
-            selectedOptionId: question.selectedOptionId,
-            isCorrect: question.isCorrect,
-            isBookmarked: question.isBookmarked,
-            answeredAt: question.answeredAt,
-          })),
+      for (const question of session.questions) {
+        const questionData = {
+          sessionId: session.id,
+          questionId: question.questionId,
+          questionContent: question.questionContent,
+          imageUrl: question.imageUrl,
+          mediaFileId: question.mediaFileId,
+          optionsSnapshot:
+            question.optionsSnapshot as unknown as Prisma.InputJsonValue,
+          correctOptionId: question.correctOptionId,
+          isCritical: question.isCritical,
+          displayOrder: question.displayOrder,
+          selectedOptionId: question.selectedOptionId,
+          isCorrect: question.isCorrect,
+          isBookmarked: question.isBookmarked,
+          answeredAt: question.answeredAt,
+        };
+
+        await tx.examSessionQuestion.upsert({
+          where: { id: question.id },
+          create: { id: question.id, ...questionData },
+          update: questionData,
         });
       }
     });

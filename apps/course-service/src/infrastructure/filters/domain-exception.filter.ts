@@ -18,6 +18,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
       COURSE_NOT_FOUND: HttpStatus.NOT_FOUND,
       LESSON_NOT_FOUND: HttpStatus.NOT_FOUND,
       ENROLLMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
+      ENROLLMENT_UNAUTHORIZED: HttpStatus.FORBIDDEN,
       ENROLLMENT_ALREADY_EXISTS: HttpStatus.CONFLICT,
       LESSON_ALREADY_COMPLETED: HttpStatus.CONFLICT,
       INSTRUCTOR_ALREADY_ASSIGNED: HttpStatus.CONFLICT,
@@ -25,6 +26,8 @@ export class DomainExceptionFilter implements ExceptionFilter {
       COURSE_HAS_NO_LESSON: HttpStatus.UNPROCESSABLE_ENTITY,
       ENROLLMENT_ALREADY_COMPLETED: HttpStatus.UNPROCESSABLE_ENTITY,
       COURSE_CAPACITY_EXCEEDED: HttpStatus.UNPROCESSABLE_ENTITY,
+      STUDENT_LICENSE_NOT_ASSIGNED: HttpStatus.UNPROCESSABLE_ENTITY,
+      STUDENT_LICENSE_MISMATCH: HttpStatus.UNPROCESSABLE_ENTITY,
     };
 
     const status = statusMap[exception.code] ?? HttpStatus.BAD_REQUEST;

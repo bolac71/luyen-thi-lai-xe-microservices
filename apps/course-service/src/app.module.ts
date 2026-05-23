@@ -59,6 +59,9 @@ import { CourseModule } from './course.module';
               connectionTimeout: Joi.number().default(10000),
               heartbeat: Joi.number().default(60),
             }).optional(),
+            redis: Joi.object({
+              url: Joi.string().default('redis://localhost:6379'),
+            }).optional(),
             keycloak: Joi.object({
               authServerUrl: Joi.string().required(),
               realm: Joi.string().required(),

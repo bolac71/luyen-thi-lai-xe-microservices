@@ -102,7 +102,7 @@ export class AdminService {
       where: { id: userId },
     });
     if (!user)
-      throw new NotFoundException('Không tìm thấy người dùng (Identity User)');
+      throw new NotFoundException(`Cannot find user with id ${userId}`);
     return this.toResponse(user);
   }
 
@@ -114,9 +114,9 @@ export class AdminService {
       where: { id: userId },
     });
     if (!existing)
-      throw new NotFoundException('Không tìm thấy người dùng (Identity User)');
+      throw new NotFoundException(`Cannot find user with id ${userId}`);
     if (existing.isDeleted) {
-      throw new BadRequestException('Không thể cập nhật người dùng đã bị xóa');
+      throw new BadRequestException(`Cannot update a deleted user: ${userId}`);
     }
 
     const email = dto.email ?? existing.email;
@@ -171,7 +171,7 @@ export class AdminService {
       where: { id: userId },
     });
     if (!existing)
-      throw new NotFoundException('Không tìm thấy người dùng (Identity User)');
+      throw new NotFoundException(`Cannot find user with id ${userId}`);
     if (existing.isDeleted) return this.toResponse(existing);
 
     await this.keycloakAdminService.setUserEnabled(userId, false);

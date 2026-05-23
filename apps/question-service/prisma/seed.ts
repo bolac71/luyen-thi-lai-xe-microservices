@@ -35,7 +35,7 @@ const LICENSE_CATEGORIES = [
 
 const QUESTION_TOPICS = [
   {
-    id: '10000000-0000-0000-0000-000000000101',
+    id: deterministicUuid('bca-600-topic-1'),
     chapter: 1,
     from: 1,
     to: 180,
@@ -43,7 +43,7 @@ const QUESTION_TOPICS = [
     description: 'Bộ 600 câu hỏi Bộ Công an, câu 1-180',
   },
   {
-    id: '10000000-0000-0000-0000-000000000102',
+    id: deterministicUuid('bca-600-topic-2'),
     chapter: 2,
     from: 181,
     to: 205,
@@ -51,7 +51,7 @@ const QUESTION_TOPICS = [
     description: 'Bộ 600 câu hỏi Bộ Công an, câu 181-205',
   },
   {
-    id: '10000000-0000-0000-0000-000000000103',
+    id: deterministicUuid('bca-600-topic-3'),
     chapter: 3,
     from: 206,
     to: 263,
@@ -59,7 +59,7 @@ const QUESTION_TOPICS = [
     description: 'Bộ 600 câu hỏi Bộ Công an, câu 206-263',
   },
   {
-    id: '10000000-0000-0000-0000-000000000104',
+    id: deterministicUuid('bca-600-topic-4'),
     chapter: 4,
     from: 264,
     to: 300,
@@ -67,7 +67,7 @@ const QUESTION_TOPICS = [
     description: 'Bộ 600 câu hỏi Bộ Công an, câu 264-300',
   },
   {
-    id: '10000000-0000-0000-0000-000000000105',
+    id: deterministicUuid('bca-600-topic-5'),
     chapter: 5,
     from: 301,
     to: 485,
@@ -75,7 +75,7 @@ const QUESTION_TOPICS = [
     description: 'Bộ 600 câu hỏi Bộ Công an, câu 301-485',
   },
   {
-    id: '10000000-0000-0000-0000-000000000106',
+    id: deterministicUuid('bca-600-topic-6'),
     chapter: 6,
     from: 486,
     to: 600,

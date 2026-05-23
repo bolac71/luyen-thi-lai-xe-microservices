@@ -4,7 +4,7 @@ export class QuestionNotFoundException extends DomainException {
   readonly code = 'QUESTION_NOT_FOUND';
 
   constructor(questionId: string) {
-    super(`Không tìm thấy câu hỏi: ${questionId}`);
+    super(`Cannot find question with id ${questionId}`);
   }
 }
 
@@ -12,7 +12,7 @@ export class QuestionTopicNotFoundException extends DomainException {
   readonly code = 'QUESTION_TOPIC_NOT_FOUND';
 
   constructor(topicId: string) {
-    super(`Không tìm thấy chủ đề câu hỏi: ${topicId}`);
+    super(`Cannot find question topic with id ${topicId}`);
   }
 }
 
@@ -24,7 +24,7 @@ export class QuestionAlreadyDeletedException extends DomainException {
   readonly code = 'QUESTION_ALREADY_DELETED';
 
   constructor(questionId: string) {
-    super(`Câu hỏi đã bị xóa: ${questionId}`);
+    super(`Question ${questionId} has already been deleted`);
   }
 }
 
@@ -32,7 +32,7 @@ export class QuestionVersionConflictException extends DomainException {
   readonly code = 'QUESTION_VERSION_CONFLICT';
 
   constructor(questionId: string) {
-    super(`Câu hỏi ${questionId} đã bị thay đổi bởi người dùng khác`);
+    super(`Question ${questionId} has been modified by another user`);
   }
 }
 
@@ -40,6 +40,6 @@ export class QuestionDuplicateException extends DomainException {
   readonly code = 'QUESTION_DUPLICATE';
 
   constructor() {
-    super('Câu hỏi với chữ ký tương tự đã tồn tại');
+    super('Question with similar content already exists');
   }
 }

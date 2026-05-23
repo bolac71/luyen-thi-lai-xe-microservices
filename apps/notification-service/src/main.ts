@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { ValidationPipe } from '@nestjs/common';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { Logger } from '@nestjs/common';
 import {
@@ -23,6 +24,7 @@ async function bootstrap() {
   const port = configService.get<number>('port') ?? 3000;
 
   app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalFilters(new ApiExceptionFilter());
 
   // Cấu hình Swagger
@@ -35,7 +37,9 @@ async function bootstrap() {
     transport: Transport.RMQ,
     options: {
       urls: [rabbitmqUrl],
-      queue: 'notification_queue',
+      queue: 'notification_service_events',
+      queueOptions: { durable: true },
+      noAck: false,
     },
   });
 

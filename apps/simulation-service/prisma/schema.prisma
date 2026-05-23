@@ -1,0 +1,100 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../../node_modules/@prisma/simulation-client"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LicenseCategory {
+  A1
+  A2
+  B1
+  B2
+  C
+  D
+  E
+  F
+}
+
+enum SimulationSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+model Maneuver {
+  id              String          @id @default(uuid())
+  title           String          @db.Text
+  description     String          @db.Text
+  licenseCategory LicenseCategory
+  displayOrder    Int
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  checkpoints ManeuverCheckpoint[]
+
+  @@index([licenseCategory, isActive, displayOrder])
+  @@map("maneuvers")
+}
+
+model ManeuverCheckpoint {
+  id            String   @id @default(uuid())
+  maneuverId    String
+  title         String   @db.Text
+  instruction   String   @db.Text
+  penalty       String?  @db.Text
+  displayOrder  Int
+
+  maneuver Maneuver @relation(fields: [maneuverId], references: [id], onDelete: Cascade)
+
+  @@index([maneuverId, displayOrder])
+  @@map("maneuver_checkpoints")
+}
+
+model ManeuverError {
+  id              String          @id @default(uuid())
+  licenseCategory LicenseCategory
+  code            String
+  description     String          @db.Text
+  severity        String
+  createdAt       DateTime        @default(now())
+
+  @@index([licenseCategory])
+  @@map("maneuver_errors")
+}
+
+model SimulationSession {
+  id              String                  @id @default(uuid())
+  studentId       String
+  licenseCategory LicenseCategory
+  status          SimulationSessionStatus @default(IN_PROGRESS)
+  totalScenarios  Int                     @default(0)
+  correctCount    Int                     @default(0)
+  score           Int?
+  isPassed        Boolean?
+  startedAt       DateTime                @default(now())
+  completedAt     DateTime?
+
+  answers SimulationAnswer[]
+
+  @@index([studentId, status, startedAt])
+  @@map("simulation_sessions")
+}
+
+model SimulationAnswer {
+  id               String   @id @default(uuid())
+  sessionId        String
+  scenarioId       String
+  selectedOptionId String?
+  isCorrect        Boolean?
+  answeredAt       DateTime @default(now())
+
+  session SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, scenarioId])
+  @@map("simulation_answers")
+}

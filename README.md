@@ -30,7 +30,70 @@ File roadmap việc tiếp theo: [README.NEXT-STEPS.md](./README.NEXT-STEPS.md)
   - `media-service`
   - `docs-service` dùng cho tài liệu / Swagger tổng hợp khi cần
 
-## 3. Chạy full stack bằng Docker
+## 3. First Run Cho Dev/Frontend Clone Repo Lần Đầu
+
+Khuyến nghị cho frontend/dev mới kéo repo: chạy backend ở hybrid mode. Infra chạy bằng Docker, service NestJS chạy local. Cách này dễ debug hơn full Docker và ít gặp lỗi build image.
+
+Yêu cầu:
+
+- Docker Desktop đang chạy
+- Node.js >= 18
+- npm. Trên Windows nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd`
+
+Từ root repo, chạy theo đúng thứ tự:
+
+```powershell
+npm.cmd install
+npm.cmd run infra:up
+npm.cmd run consul:seed:local
+npm.cmd run db:generate
+npm.cmd run db:deploy
+npm.cmd run db:seed
+npm.cmd run dev
+```
+
+Sau khi chạy xong:
+
+- Kong/API Gateway: http://localhost:8000
+- Swagger tổng hợp: http://localhost:3009/docs
+- Keycloak: http://localhost:8080
+- Consul: http://localhost:8500
+- RabbitMQ UI: http://localhost:15672
+- Mailpit: http://localhost:8025
+- Kibana: http://localhost:5601
+
+Demo accounts được seed vào Keycloak, password chung:
+
+```text
+123456
+```
+
+Ví dụ login frontend:
+
+- `admin@test.com`
+- `manager@test.com`
+- `instructor.b1@test.com`
+- `student.b1@test.com`
+- `student.b2@test.com`
+
+Frontend chỉ gửi:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Không tự gửi `x-user-id`.
+
+Nếu muốn reset sạch môi trường local:
+
+```powershell
+npm.cmd run infra:down
+docker compose -f docker-compose.infra.yml down -v
+```
+
+Sau đó chạy lại từ bước `infra:up`.
+
+## 4. Chạy full stack bằng Docker
 
 Yêu cầu:
 
@@ -46,6 +109,7 @@ Tắt:
 
 ```bash
 npm run docker:down
+docker compose down
 ```
 
 URL quan trọng:
@@ -57,7 +121,7 @@ URL quan trọng:
 - Keycloak: http://localhost:8080
 - Kibana: http://localhost:5601
 
-## 4. Hybrid Dev Mode
+## 5. Chạy local để code/debug
 
 Yêu cầu:
 
@@ -78,6 +142,8 @@ Nếu cần generate Prisma client trước khi build hoặc check:
 
 ```bash
 npm run prisma:generate
+# hoặc
+npm run db:generate
 ```
 
 Nếu cần apply migration + seed:
@@ -93,7 +159,7 @@ Smoke test health qua Kong:
 npm run smoke
 ```
 
-## 5. Root Scripts hữu ích
+## 6. Root Scripts hữu ích
 
 ```bash
 npm run build
@@ -101,25 +167,31 @@ npm run check-types
 npm run lint
 npm run format
 npm run prisma:generate
+npm run db:generate
 npm run db:migrate
 npm run db:deploy
 npm run db:seed
+npm run db:seed:question-images
 npm run db:backup:local
 npm run smoke
 ```
 
-## 6. Consul
+## 7. Consul Configuration Management
 
-Repo vẫn hỗ trợ seed cấu hình local qua JSON:
+Tất cả microservices sử dụng Consul để quản lý configuration tập trung. Repo vẫn hỗ trợ seed cấu hình local qua JSON, và trong Docker thì `consul-init` sẽ seed tự động khi stack lên.
+
+Các command hữu ích:
 
 ```bash
+npm run consul:seed
 npm run consul:seed:local
 npm run consul:list
+npm run consul:get
 ```
 
-Trong Docker, `consul-init` cũng sẽ seed cấu hình tự động khi stack lên.
+Hướng dẫn chi tiết: [guides/consul/WORKFLOW.md](./guides/consul/WORKFLOW.md)
 
-## 7. Gateway Routes
+## 8. Gateway Routes
 
 - `/auth` -> `identity-service`
 - `/users` -> `user-service`
@@ -128,10 +200,22 @@ Trong Docker, `consul-init` cũng sẽ seed cấu hình tự động khi stack l
 - `/courses` -> `course-service`
 - `/notifications` -> `notification-service`
 - `/analytics` -> `analytics-service`
-- `/simulations` -> `simulation-service`
+- `/simulation` -> `simulation-service`
 - `/media` -> `media-service`
 
-## 8. DevOps Notes
+## 9. Seed demo data khi chạy bằng Docker
+
+```bash
+docker compose up -d consul consul-init keycloak redis rabbitmq \
+  db-identity db-user db-media db-question db-exam db-course \
+  db-notification db-analytics db-simulation
+docker compose run --rm identity-service npm run db:deploy -w identity-service
+docker compose run --rm identity-service npm run db:seed -w identity-service
+```
+
+Demo accounts được seed vào Keycloak và các service DB dùng chung password `123456`.
+
+## 10. DevOps Notes
 
 - Health endpoints chuẩn:
   - `/health`
@@ -144,7 +228,7 @@ Trong Docker, `consul-init` cũng sẽ seed cấu hình tự động khi stack l
   - [docker-compose.deploy.yml](./docker-compose.deploy.yml)
   - [guides/devops/JENKINS-DOCKER-COMPOSE.md](./guides/devops/JENKINS-DOCKER-COMPOSE.md)
 
-## 9. Quy trình làm việc
+## 11. Quy trình làm việc
 
 1. Tạo branch từ `main`
 2. Code và commit theo từng scope nhỏ

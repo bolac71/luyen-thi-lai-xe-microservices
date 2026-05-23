@@ -1,7 +1,7 @@
 # Exam Service API Specification
 
 **Base URL qua Kong:** `http://localhost:8000`  
-**Service paths:** `/exams`, `/admin/exams/templates`  
+**Service paths:** `/exams`, `/admin/exams/templates`, `/admin/exams/sessions`  
 **Direct local:** `http://localhost:3003`  
 **Swagger UI:** `http://localhost:3003/docs`  
 **Swagger UI qua Kong:** `http://localhost:8000/exam-service/docs`  
@@ -51,9 +51,11 @@ Authorization: Bearer <access_token>
 | `GET /admin/exams/templates/:id` | `ADMIN` |
 | `PATCH /admin/exams/templates/:id` | `ADMIN` |
 | `DELETE /admin/exams/templates/:id` | `ADMIN` |
+| `GET /admin/exams/sessions` | `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR` |
 | `GET /exams/available` | `STUDENT` |
 | `POST /exams/sessions` | `STUDENT` |
 | `GET /exams/sessions` | `STUDENT` |
+| `GET /exams/review/missed-questions` | `STUDENT` |
 | `GET /exams/sessions/:id/questions` | `STUDENT`, owner only |
 | `PATCH /exams/sessions/:id/answers` | `STUDENT`, owner only |
 | `POST /exams/sessions/:id/submit` | `STUDENT`, owner only |
@@ -100,7 +102,7 @@ Exam-service gọi nội bộ `question-service /admin/questions/pool` bằng Ke
   "shuffleQuestions": true,
   "topicDistribution": [
     {
-      "topicId": "10000000-0000-0000-0000-000000000101",
+      "topicId": "9f49045f-156e-5252-8486-babb36dc74fd",
       "questionCount": 9
     }
   ],
@@ -117,9 +119,11 @@ Exam-service gọi nội bộ `question-service /admin/questions/pool` bằng Ke
 
 Critical passing rule: `isPassed = score >= passingScore && criticalMistakes <= maxCriticalMistakes`.
 
+Session timeout rule: exam-service uses server time and `expiresAt` as the source of truth. `submit`, `answers`, `questions`, and `result` touch points lazily finalize an expired `IN_PROGRESS` session as `TIMED_OUT`, persist the graded result, and publish the same completion/pass/fail events as submit. If the session is still `IN_PROGRESS` and not expired, `GET /result` returns `EXAM_SESSION_NOT_FINISHED`.
+
 ### Student-Safe Question
 
-Student-facing question payload intentionally excludes `correctOptionId`, `options[].isCorrect`, explanation, and scoring metadata.
+Student-facing question payload intentionally excludes `correctOptionId`, `options[].isCorrect`, `isCritical`, explanation, and scoring metadata.
 
 ```json
 {
@@ -140,7 +144,6 @@ Student-facing question payload intentionally excludes `correctOptionId`, `optio
     }
   ],
   "displayOrder": 1,
-  "isCritical": false,
   "isBookmarked": false,
   "selectedOptionId": null
 }
@@ -150,7 +153,7 @@ If `mediaFileId` is present, frontend should call `GET /media/files/:mediaFileId
 
 ### Exam Session
 
-For active sessions, `questions[].isCorrect` is not returned.
+For active sessions, `questions[].isCorrect` and `questions[].isCritical` are not returned.
 
 ```json
 {
@@ -181,7 +184,6 @@ For active sessions, `questions[].isCorrect` is not returned.
         }
       ],
       "displayOrder": 1,
-      "isCritical": false,
       "isBookmarked": false,
       "selectedOptionId": null
     }
@@ -191,7 +193,7 @@ For active sessions, `questions[].isCorrect` is not returned.
 
 ### Exam Result
 
-Submit/result responses include `questions[].isCorrect`, but still do not expose `correctOptionId` or `options[].isCorrect`.
+Submit/result responses include `questions[].isCorrect`, but still do not expose `correctOptionId`, `options[].isCorrect`, or `questions[].isCritical`. Fatal-question outcome is exposed only through aggregate result fields such as `failedByCritical` and `criticalMistakes`.
 
 ```json
 {
@@ -222,7 +224,6 @@ Submit/result responses include `questions[].isCorrect`, but still do not expose
         }
       ],
       "displayOrder": 1,
-      "isCritical": false,
       "isBookmarked": false,
       "selectedOptionId": "option-1",
       "isCorrect": true
@@ -310,11 +311,11 @@ Create an exam template. This is an admin-only blueprint; students do not call t
   "shuffleQuestions": true,
   "topicDistribution": [
     {
-      "topicId": "10000000-0000-0000-0000-000000000101",
+      "topicId": "9f49045f-156e-5252-8486-babb36dc74fd",
       "questionCount": 9
     },
     {
-      "topicId": "10000000-0000-0000-0000-000000000105",
+      "topicId": "d7a509c3-153f-5c03-9398-6a5626aa70d0",
       "questionCount": 21
     }
   ]
@@ -356,11 +357,11 @@ Create an exam template. This is an admin-only blueprint; students do not call t
     "shuffleQuestions": true,
     "topicDistribution": [
       {
-        "topicId": "10000000-0000-0000-0000-000000000101",
+        "topicId": "9f49045f-156e-5252-8486-babb36dc74fd",
         "questionCount": 9
       },
       {
-        "topicId": "10000000-0000-0000-0000-000000000105",
+        "topicId": "d7a509c3-153f-5c03-9398-6a5626aa70d0",
         "questionCount": 21
       }
     ],
@@ -498,11 +499,11 @@ Optimistic concurrency uses `version`.
   "shuffleQuestions": true,
   "topicDistribution": [
     {
-      "topicId": "10000000-0000-0000-0000-000000000101",
+      "topicId": "9f49045f-156e-5252-8486-babb36dc74fd",
       "questionCount": 9
     },
     {
-      "topicId": "10000000-0000-0000-0000-000000000105",
+      "topicId": "d7a509c3-153f-5c03-9398-6a5626aa70d0",
       "questionCount": 21
     }
   ],
@@ -546,11 +547,11 @@ Optimistic concurrency uses `version`.
     "shuffleQuestions": true,
     "topicDistribution": [
       {
-        "topicId": "10000000-0000-0000-0000-000000000101",
+        "topicId": "9f49045f-156e-5252-8486-babb36dc74fd",
         "questionCount": 9
       },
       {
-        "topicId": "10000000-0000-0000-0000-000000000105",
+        "topicId": "d7a509c3-153f-5c03-9398-6a5626aa70d0",
         "questionCount": 21
       }
     ],
@@ -673,7 +674,6 @@ The response includes `questions[]` so frontend can render the exam immediately 
           }
         ],
         "displayOrder": 1,
-        "isCritical": false,
         "isBookmarked": false,
         "selectedOptionId": null
       }
@@ -737,7 +737,6 @@ List current student exam history.
               }
             ],
             "displayOrder": 1,
-            "isCritical": false,
             "isBookmarked": false,
             "selectedOptionId": null
           }
@@ -789,7 +788,6 @@ Return current session questions without answer keys.
           }
         ],
         "displayOrder": 1,
-        "isCritical": false,
         "isBookmarked": false,
         "selectedOptionId": null
       }
@@ -804,7 +802,7 @@ Frontend note: render questions by `displayOrder`; use `questionId` and `options
 
 ### PATCH `/exams/sessions/:id/answers`
 
-Autosave answer and/or bookmark. Autosave is allowed only while session is active and not expired.
+Autosave answer and/or bookmark. Autosave is applied only while session is active and not expired. If the session has passed `expiresAt`, exam-service lazily finalizes it as `TIMED_OUT`; the submitted answer payload is not applied, and the response returns the finalized session state.
 
 **Auth:** `STUDENT`, owner only.
 
@@ -826,7 +824,7 @@ Autosave answer and/or bookmark. Autosave is allowed only while session is activ
 
 **Response `200 OK`**
 
-Controller returns the updated active session. `questions[].isCorrect` is not returned.
+Controller returns the updated session. `questions[].isCorrect` is not returned. Normal autosave returns `status = "IN_PROGRESS"`; an expired session returns `status = "TIMED_OUT"` with `score`, `isPassed`, `finishedAt`, and critical-mistake fields populated.
 
 ```json
 {
@@ -863,7 +861,6 @@ Controller returns the updated active session. `questions[].isCorrect` is not re
           }
         ],
         "displayOrder": 1,
-        "isCritical": false,
         "isBookmarked": true,
         "selectedOptionId": "option-uuid"
       }
@@ -925,7 +922,6 @@ Submit and synchronously grade. Each correct answer is 1 point; wrong/unanswered
           }
         ],
         "displayOrder": 1,
-        "isCritical": false,
         "isBookmarked": false,
         "selectedOptionId": "option-1",
         "isCorrect": true
@@ -941,7 +937,7 @@ Submit and synchronously grade. Each correct answer is 1 point; wrong/unanswered
 
 ### GET `/exams/sessions/:id/result`
 
-Return graded result. If session is still `IN_PROGRESS`, returns `EXAM_SESSION_NOT_FINISHED`.
+Return graded result. If the session is expired but still stored as `IN_PROGRESS`, this endpoint lazily finalizes it as `TIMED_OUT` and returns the graded result. If the session is still `IN_PROGRESS` and not expired, it returns `EXAM_SESSION_NOT_FINISHED`.
 
 **Auth:** `STUDENT`, owner only.
 
@@ -984,7 +980,6 @@ Same shape as `POST /exams/sessions/:id/submit`.
           }
         ],
         "displayOrder": 1,
-        "isCritical": false,
         "isBookmarked": false,
         "selectedOptionId": "option-1",
         "isCorrect": true
@@ -1033,5 +1028,70 @@ Frontend note: use this endpoint for result screen refresh/deep link; use submit
   "studentId": "student-user-id",
   "failedByCritical": true,
   "licenseCategory": "B2"
+## ASR Additions: History Filters And Missed Review
+
+### GET `/exams/sessions`
+
+Student exam history now supports filters:
+
+- `page`, `size`
+- `status`
+- `isPassed`
+- `from`, `to` ISO timestamps
+
+Response shape is the same paginated `ExamSession` list documented in `GET /exams/sessions`.
+
+### GET `/admin/exams/sessions`
+
+Role: `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR`.
+
+Lists exam history across students for dashboard/review workflows.
+
+Query filters:
+
+- `studentId`
+- `page`, `size`
+- `status`
+- `isPassed`
+- `from`, `to`
+
+**Response `200`**
+
+Same paginated `ExamSession` list shape as student history, but records may belong to multiple students.
+
+### GET `/exams/review/missed-questions`
+
+Role: `STUDENT`.
+
+Query: `limit` from 1 to 50, default 20.
+
+Returns recently missed question snapshots for review. Response does not include `correctOptionId`, `isCorrect`, or explanations.
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/exams/review/missed-questions?limit=20",
+  "data": [
+    {
+      "questionId": "9fd83d2d-64e6-5e87-b7a0-0edb40bd8fa6",
+      "content": "Người điều khiển phương tiện phải làm gì khi gặp biển báo này?",
+      "topicId": "10000000-0000-0000-0000-000000000103",
+      "topicName": "Biển báo hiệu đường bộ",
+      "options": [
+        {
+          "id": "1265a10e-52ab-5234-8b83-38203cd811f2",
+          "content": "Giảm tốc độ và quan sát"
+        }
+      ],
+      "lastAnsweredAt": "2026-05-21T09:55:00.000Z"
+    }
+  ]
 }
 ```
+
+Exam sessions store immutable template snapshot fields at start time: template name/version, license category, total questions, passing score, duration, critical config, and topic distribution.

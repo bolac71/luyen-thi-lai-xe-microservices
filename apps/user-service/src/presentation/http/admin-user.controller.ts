@@ -9,7 +9,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthenticatedUser, Roles } from 'nest-keycloak-connect';
 import { AssignLicenseTierCommand } from '../../application/use-cases/assign-license-tier/assign-license-tier.command';
 import { AssignLicenseTierUseCase } from '../../application/use-cases/assign-license-tier/assign-license-tier.use-case';
@@ -135,15 +140,19 @@ export class AdminUserController {
 
   @Patch(':id/license-tier')
   @Roles({ roles: ['realm:ADMIN', 'realm:CENTER_MANAGER'] })
-  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Assign license tier to a student' })
+  @ApiOkResponse({
+    description: 'License tier assigned and updated profile returned',
+    type: UserProfileResponseDto,
+  })
   async assignLicenseTier(
     @Param('id') id: string,
     @Body() dto: AssignLicenseTierRequestDto,
     @AuthenticatedUser() user: JwtPayload,
-  ): Promise<void> {
-    await this.assignLicenseTierUseCase.execute(
+  ): Promise<UserProfileResponseDto> {
+    const result = await this.assignLicenseTierUseCase.execute(
       new AssignLicenseTierCommand(id, dto.licenseTier, user.sub),
     );
+    return UserProfileResponseDto.fromResult(result);
   }
 }

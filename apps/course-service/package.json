@@ -20,6 +20,7 @@
     "db:generate": "prisma generate --schema ./prisma/schema.prisma",
     "db:migrate": "tsx ../../scripts/with-consul-env.ts course-service -- prisma migrate dev --schema ./prisma/schema.prisma",
     "db:deploy": "tsx ../../scripts/with-consul-env.ts course-service -- prisma migrate deploy --schema ./prisma/schema.prisma",
+    "db:seed": "tsx ../../scripts/with-consul-env.ts course-service -- tsx prisma/seed.ts",
     "db:studio": "tsx ../../scripts/with-consul-env.ts course-service -- prisma studio --schema ./prisma/schema.prisma",
     "db:seed": "tsx ../../scripts/with-consul-env.ts course-service -- ts-node --project tsconfig.json prisma/seed.ts",
     "test": "jest",
@@ -40,6 +41,7 @@
     "amqplib": "^0.10.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "ioredis": "^5.6.1",
     "nest-keycloak-connect": "^1.10.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"

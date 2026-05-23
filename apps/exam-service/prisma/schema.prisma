@@ -55,6 +55,14 @@ model ExamSession {
   id               String            @id @default(uuid())
   studentId        String
   templateId       String
+  templateNameSnapshot String          @default("")
+  templateVersionSnapshot Int          @default(1)
+  licenseCategorySnapshot LicenseCategory @default(B1)
+  totalQuestionsSnapshot Int           @default(0)
+  passingScoreSnapshot Int             @default(0)
+  durationMinutesSnapshot Int          @default(0)
+  criticalQuestionsSnapshot Int        @default(0)
+  topicDistributionSnapshot Json       @default("[]")
   status           ExamSessionStatus @default(IN_PROGRESS)
   score            Int?
   isPassed         Boolean?
@@ -71,6 +79,9 @@ model ExamSession {
   questions ExamSessionQuestion[]
 
   @@index([studentId, status])
+  @@index([studentId, startedAt])
+  @@index([studentId, isPassed, startedAt])
+  @@index([startedAt, isPassed])
   @@index([templateId])
   @@map("exam_sessions")
 }

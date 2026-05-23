@@ -121,7 +121,7 @@ import {
               configService.get<string>('rabbitmq.url') ??
                 'amqp://localhost:5672',
             ],
-            queue: 'notification_queue',
+            queue: 'notification_service_events',
             queueOptions: { durable: true },
           },
         }),

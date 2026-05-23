@@ -38,6 +38,7 @@ export class PrismaCourseRepository extends CourseRepository {
         licenseCategory: filter.licenseCategory,
       }),
       ...(filter.status && { status: filter.status }),
+      ...(!filter.status && { status: { not: 'ARCHIVED' as const } }),
       ...(filter.createdById && { createdById: filter.createdById }),
     };
 

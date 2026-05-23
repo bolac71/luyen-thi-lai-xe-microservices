@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Chỉ chứa infrastructure — dùng khi chạy services local (hybrid dev mode)
 # Khởi động: docker compose -f docker-compose.infra.yml up -d
 
@@ -19,7 +17,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d identity_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 45s
 
   db-user:
     image: postgres:15-alpine
@@ -31,7 +30,29 @@ services:
       - "5433:5432"
     volumes:
       - db_user_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d user_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
+  db-exam:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: exam_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - db_exam_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d exam_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
   db-course:
     image: postgres:15-alpine
     environment:
@@ -42,6 +63,12 @@ services:
       - "5435:5432"
     volumes:
       - db_course_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d course_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
   db-question:
     image: postgres:15-alpine
@@ -53,6 +80,12 @@ services:
       - "5436:5432"
     volumes:
       - db_question_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d question_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
   db-notification:
     image: postgres:15-alpine
@@ -64,6 +97,12 @@ services:
       - "5437:5432"
     volumes:
       - db_notification_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d notification_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
   db-analytics:
     image: postgres:15-alpine
@@ -75,6 +114,12 @@ services:
       - "5438:5432"
     volumes:
       - db_analytics_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d analytics_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
   db-simulation:
     image: postgres:15-alpine
@@ -86,6 +131,12 @@ services:
       - "5439:5432"
     volumes:
       - db_simulation_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d simulation_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
   db-media:
     image: postgres:15-alpine
@@ -97,6 +148,12 @@ services:
       - "5440:5432"
     volumes:
       - db_media_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d media_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
   # ── Message Broker ─────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -161,6 +218,12 @@ services:
       POSTGRES_PASSWORD: password
     volumes:
       - db_keycloak_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
@@ -182,8 +245,10 @@ services:
     volumes:
       - ./docker/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     depends_on:
-      - db-keycloak
-      - mailpit
+      db-keycloak:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
 
   # ── API Gateway (trỏ vào localhost của máy host) ───────────
   mailpit:
@@ -283,6 +348,7 @@ services:
 volumes:
   db_identity_data:
   db_user_data:
+  db_exam_data:
   db_course_data:
   db_question_data:
   db_notification_data:

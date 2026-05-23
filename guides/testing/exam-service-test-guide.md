@@ -645,7 +645,7 @@ Expect start response:
 - `data.isPassed = null`
 - `data.failedByCritical = false`
 - `data.questions.length = 3`
-- mỗi question có `questionId`, `content`, `options`, `displayOrder`, `isCritical`, `isBookmarked`, `selectedOptionId`
+- mỗi question có `questionId`, `content`, `options`, `displayOrder`, `isBookmarked`, `selectedOptionId`
 
 ### 7.3 Confidentiality check cho active questions
 
@@ -660,6 +660,7 @@ curl -s "$EXAM_BASE/exams/sessions/$SESSION_ID/questions" \
 Không được có:
 
 - `correctOptionId`
+- `isCritical`
 - `isCorrect`
 - `explanation`
 
@@ -716,6 +717,7 @@ Expect:
 - question đó có `selectedOptionId = OPTION_1_ID`
 - `isBookmarked = true`
 - response vẫn không có `isCorrect`
+- nếu session đã quá `expiresAt`, API không lưu answer mới; service tự grade timeout và trả về `status = "TIMED_OUT"`
 
 Autosave thêm câu 2 và câu 3:
 
@@ -776,6 +778,20 @@ Expect:
 - `isPassed = true` nếu `score >= passingScore` và `criticalMistakes <= maxCriticalMistakes`
 - `failedByCritical = true` nếu `criticalMistakes > maxCriticalMistakes`
 - result payload được phép có `questions[].isCorrect`
+- result payload does not expose `questions[].isCritical`; fatal-question outcome is visible only through `failedByCritical` and `criticalMistakes`
+
+Retry submit with the same session:
+
+```bash
+curl -s -X POST "$EXAM_BASE/exams/sessions/$SESSION_ID/submit" \
+  -H "Authorization: Bearer $STUDENT_TOKEN" | jq .data | {id,status,score,isPassed,failedByCritical,criticalMistakes}
+```
+
+Expect:
+
+- HTTP `200`
+- returns the already graded result
+- does not grade again, duplicate answers, or publish another event
 
 ### 7.9 GET /exams/sessions/:id/result - xem kết quả
 
@@ -789,7 +805,8 @@ Expect:
 - HTTP `200`
 - data giống submit result
 - `questions[].isCorrect` có giá trị `true/false/null`
-- vẫn không expose `correctOptionId` hoặc `options[].isCorrect`
+- result does not expose `correctOptionId`, `options[].isCorrect`, or `questions[].isCritical`
+- nếu session đã quá `expiresAt` nhưng DB vẫn đang `IN_PROGRESS`, endpoint này tự finalize thành `TIMED_OUT` và trả result thay vì báo `EXAM_SESSION_NOT_FINISHED`
 
 ### 7.10 GET /exams/sessions - history sau submit
 
@@ -924,7 +941,79 @@ Expect:
 - HTTP `409`
 - `code = "EXAM_SESSION_ALREADY_FINISHED"` hoặc domain conflict từ session state
 
-### 8.6 Student không được gọi template admin endpoints
+### 8.6 Session timeout lazy finalization
+
+Mục tiêu: chứng minh session hết giờ được server finalize khi student gọi `result` hoặc `answers`, không cần background cron.
+
+Start một session riêng để test timeout:
+
+```bash
+TIMEOUT_SESSION_ID=$(curl -s -X POST "$EXAM_BASE/exams/sessions" \
+  -H "Authorization: Bearer $STUDENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"templateId\": \"$TEMPLATE_ID\"
+  }" | jq -r '.data.id')
+
+echo "$TIMEOUT_SESSION_ID"
+```
+
+Để demo nhanh, chỉnh `expiresAt` về quá khứ trong DB local:
+
+```bash
+docker exec -i luyen-thi-lai-xe-microservices-db-exam-1 psql -U user -d exam_db \
+  -c "update exam_sessions set \"expiresAt\" = now() - interval '1 minute' where id = '$TIMEOUT_SESSION_ID';"
+```
+
+Gọi result:
+
+```bash
+curl -s "$EXAM_BASE/exams/sessions/$TIMEOUT_SESSION_ID/result" \
+  -H "Authorization: Bearer $STUDENT_TOKEN" \
+  | jq '.data | {id,status,score,isPassed,failedByCritical,criticalMistakes,finishedAt,expiresAt}'
+```
+
+Expect:
+
+- HTTP `200`
+- `status = "TIMED_OUT"`
+- `finishedAt` khác `null`
+- `score`, `isPassed`, `failedByCritical`, `criticalMistakes` đã được tính
+- RabbitMQ có `exam.session.completed` và `exam.session.passed` hoặc `exam.session.failed`
+
+Nếu gọi autosave sau khi đã quá hạn, API cũng finalize timeout và không apply answer mới:
+
+```bash
+TIMEOUT_AUTOSAVE_SESSION_ID=$(curl -s -X POST "$EXAM_BASE/exams/sessions" \
+  -H "Authorization: Bearer $STUDENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"templateId\": \"$TEMPLATE_ID\"
+  }" | jq -r '.data.id')
+
+TIMEOUT_AUTOSAVE_QUESTIONS=$(curl -s "$EXAM_BASE/exams/sessions/$TIMEOUT_AUTOSAVE_SESSION_ID/questions" \
+  -H "Authorization: Bearer $STUDENT_TOKEN")
+
+TIMEOUT_QUESTION_ID=$(echo "$TIMEOUT_AUTOSAVE_QUESTIONS" | jq -r '.data.items[0].questionId')
+TIMEOUT_OPTION_ID=$(echo "$TIMEOUT_AUTOSAVE_QUESTIONS" | jq -r '.data.items[0].options[0].id')
+
+docker exec -i luyen-thi-lai-xe-microservices-db-exam-1 psql -U user -d exam_db \
+  -c "update exam_sessions set \"expiresAt\" = now() - interval '1 minute' where id = '$TIMEOUT_AUTOSAVE_SESSION_ID';"
+
+curl -s -X PATCH "$EXAM_BASE/exams/sessions/$TIMEOUT_AUTOSAVE_SESSION_ID/answers" \
+  -H "Authorization: Bearer $STUDENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"questionId\": \"$TIMEOUT_QUESTION_ID\",
+    \"selectedOptionId\": \"$TIMEOUT_OPTION_ID\"
+  }" | jq '.data | {id,status,score,finishedAt}'
+```
+
+Expect `status = "TIMED_OUT"`.
+
+Nếu session đã được finalize bằng `result` trước đó, autosave tiếp theo có thể trả `EXAM_SESSION_ALREADY_FINISHED`; đó là đúng vì session không còn `IN_PROGRESS`.
+
+### 8.7 Student không được gọi template admin endpoints
 
 ```bash
 curl -s "$EXAM_BASE/admin/exams/templates" \
@@ -936,7 +1025,7 @@ Expect:
 - HTTP `403`
 - `code = "FORBIDDEN"`
 
-### 8.7 Admin không được start student session
+### 8.8 Admin không được start student session
 
 ```bash
 curl -s -X POST "$EXAM_BASE/exams/sessions" \
@@ -952,7 +1041,7 @@ Expect:
 - HTTP `403`
 - `code = "FORBIDDEN"`
 
-### 8.8 Student A không được đọc session của Student B
+### 8.9 Student A không được đọc session của Student B
 
 Tạo student B tương tự mục 4.2, login lấy `STUDENT_B_TOKEN`, sau đó:
 
@@ -966,7 +1055,7 @@ Expect:
 - HTTP `403`
 - `code = "EXAM_SESSION_UNAUTHORIZED"`
 
-### 8.9 Delete template đã có session
+### 8.10 Delete template đã có session
 
 Lấy version template đã có session:
 
@@ -987,7 +1076,7 @@ Expect:
 - HTTP `409`
 - `code = "EXAM_TEMPLATE_IN_USE"`
 
-### 8.10 Invalid template body
+### 8.11 Invalid template body
 
 ```bash
 curl -s -X POST "$EXAM_BASE/admin/exams/templates" \
@@ -1048,7 +1137,7 @@ order by "displayOrder";
 Kiểm tra snapshot security:
 
 - DB có `correctOptionId` để grade.
-- Student active endpoints không expose `correctOptionId`.
+- Student active endpoints do not expose `correctOptionId` or `questions[].isCritical`.
 - Result endpoint chỉ expose `isCorrect`, không expose correct answer id.
 
 ### 9.2 Kiểm tra RabbitMQ events
@@ -1259,3 +1348,26 @@ Các command trong guide dùng Bash syntax. Nếu dùng PowerShell:
 - Thay `\` thành backtick `` ` ``.
 - Thay `VAR=value` bằng `$env:VAR="value"` hoặc `$VAR="value"` tùy nhu cầu.
 - Nếu `curl` bị alias sang `Invoke-WebRequest`, dùng `curl.exe`.
+## ASR: Admin History And Missed Questions
+
+### Admin Exam History
+
+```http
+GET http://localhost:3003/admin/exams/sessions?studentId=<studentId>&isPassed=false&from=2026-05-01T00:00:00.000Z&to=2026-05-31T23:59:59.999Z
+Authorization: Bearer <admin_or_instructor_token>
+```
+
+Expected: paginated sessions ordered by `startedAt desc`.
+
+### Missed Question Review
+
+```http
+GET http://localhost:3003/exams/review/missed-questions?limit=20
+Authorization: Bearer <student_token>
+```
+
+Expected: response contains question snapshots and options only. It must not contain `correctOptionId`, `isCorrect`, or explanation.
+
+### Template Snapshot
+
+After starting a session, verify `exam_sessions` stores template snapshot columns. Updating the template later must not change existing session grading/history context.
