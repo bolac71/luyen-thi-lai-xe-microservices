@@ -222,7 +222,10 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
   - `/health/live`
   - `/health/ready`
 - Root smoke test ở [scripts/smoke.ts](./scripts/smoke.ts)
+- Root migration orchestrator ở [scripts/prisma-migrate-all.ts](./scripts/prisma-migrate-all.ts)
+- Root seed orchestrator ở [scripts/prisma-seed-all.ts](./scripts/prisma-seed-all.ts)
 - Local DB backup script ở [scripts/db-backup-local.ts](./scripts/db-backup-local.ts)
+  - Backup đủ các DB local: `identity`, `user`, `exam`, `course`, `question`, `notification`, `analytics`, `simulation`, `media`, `keycloak`
 - Jenkins / GHCR / deploy compose scaffold ở:
   - [Jenkinsfile](./Jenkinsfile)
   - [docker-compose.deploy.yml](./docker-compose.deploy.yml)
