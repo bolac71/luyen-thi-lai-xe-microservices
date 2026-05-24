@@ -244,6 +244,57 @@ services:
       retries: 20
       start_period: 45s
 
+  postgres-backup:
+    image: postgres:15-alpine
+    volumes:
+      - ./docker/backup/postgres-daily-backup.sh:/backup/postgres-daily-backup.sh:ro
+      - ./backups:/backups
+    environment:
+      NODE_ENV: development-local
+      BACKUP_ROOT: /backups/postgres
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      IDENTITY_DB_NAME: identity_db
+      USER_DB_NAME: user_db
+      EXAM_DB_NAME: exam_db
+      COURSE_DB_NAME: course_db
+      QUESTION_DB_NAME: question_db
+      NOTIFICATION_DB_NAME: notification_db
+      ANALYTICS_DB_NAME: analytics_db
+      SIMULATION_DB_NAME: simulation_db
+      MEDIA_DB_NAME: media_db
+      AUDIT_DB_NAME: audit_db
+      KEYCLOAK_DB_NAME: keycloak_db
+      KEYCLOAK_DB_USER: keycloak
+      KEYCLOAK_DB_PASSWORD: password
+    depends_on:
+      db-identity:
+        condition: service_healthy
+      db-user:
+        condition: service_healthy
+      db-exam:
+        condition: service_healthy
+      db-course:
+        condition: service_healthy
+      db-question:
+        condition: service_healthy
+      db-notification:
+        condition: service_healthy
+      db-analytics:
+        condition: service_healthy
+      db-simulation:
+        condition: service_healthy
+      db-media:
+        condition: service_healthy
+      db-audit:
+        condition: service_healthy
+      db-keycloak:
+        condition: service_healthy
+    command: sh /backup/postgres-daily-backup.sh
+    restart: unless-stopped
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     # --import-realm: tự động import tất cả *.json trong /opt/keycloak/data/import/
@@ -301,6 +352,25 @@ services:
       - keycloak
       - mailpit
     restart: "no"
+
+  keycloak-backup:
+    image: quay.io/keycloak/keycloak:24.0
+    volumes:
+      - ./docker/keycloak/keycloak-daily-export.sh:/opt/keycloak/keycloak-daily-export.sh:ro
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "/opt/keycloak/keycloak-daily-export.sh"]
+    environment:
+      NODE_ENV: development-local
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: luyen-thi-lai-xe-realm
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_EXPORT_ROOT: /backups/keycloak
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    depends_on:
+      - keycloak
+    restart: unless-stopped
 
   kong-dev:
     image: kong:latest
