@@ -39,7 +39,16 @@ import { SimulationController } from './presentation/http/simulation.controller'
     AppLoggerModule,
     HealthModule.register({
       serviceName: 'simulation-service',
-      dependencies: [{ name: 'rabbitmq', configKey: 'rabbitmq.url' }],
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        { name: 'redis', configKey: 'redis.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
     }),
     ConfigModule.forRoot({
       load: [
