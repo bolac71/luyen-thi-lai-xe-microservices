@@ -28,5 +28,8 @@ export * from './health';
 // ============== METRICS =========================
 export * from './metrics';
 
+// ============== MESSAGING =======================
+export * from './messaging';
+
 // ============== SWAGGER =========================
 export * from './config/swagger.setup';

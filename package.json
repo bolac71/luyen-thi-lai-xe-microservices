@@ -18,6 +18,7 @@
     "db:backup:local": "tsx scripts/db-backup-local.ts",
     "smoke": "tsx scripts/smoke.ts",
     "observability:smoke": "tsx scripts/observability-smoke.ts",
+    "rabbitmq:smoke": "tsx scripts/rabbitmq-resilience-smoke.ts",
     "infra:up": "docker compose -f docker-compose.infra.yml up -d",
     "infra:down": "docker compose -f docker-compose.infra.yml down",
     "infra:logs": "docker compose -f docker-compose.infra.yml logs -f",

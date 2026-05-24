@@ -17,6 +17,7 @@ out/
 # Local env files (Chặn file môi trường ở mọi nơi)
 .env
 .env.*
+*.env
 !.env.example
 
 # Consul seed production (chứa secrets thật - không commit)
@@ -46,4 +47,3 @@ pids
 # Misc
 .DS_Store
 *.pem
-

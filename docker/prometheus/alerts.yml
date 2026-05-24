@@ -57,3 +57,39 @@ groups:
         annotations:
           summary: "High Node.js CPU usage"
           description: "{{ $labels.service }} CPU usage is above 80% of one core for 5 minutes."
+
+      - alert: RabbitMqDlqHasMessages
+        expr: sum by (queue) (rabbitmq_queue_messages_ready{queue=~".*\\.dlq"}) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ DLQ has messages"
+          description: "{{ $labels.queue }} has messages waiting in DLQ for more than 2 minutes."
+
+      - alert: RabbitMqRetryBacklogHigh
+        expr: sum by (queue) (rabbitmq_queue_messages_ready{queue=~".*\\.retry\\..*"}) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ retry backlog is high"
+          description: "{{ $labels.queue }} has more than 50 retry messages for 5 minutes."
+
+      - alert: RabbitMqMessagesDeadLettered
+        expr: sum by (service, queue) (increase(rabbitmq_messages_dead_lettered_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service routed messages to DLQ"
+          description: "{{ $labels.service }} routed messages from {{ $labels.queue }} to DLQ in the last 5 minutes."
+
+      - alert: RabbitMqRetryRateHigh
+        expr: sum by (service, queue) (rate(rabbitmq_message_retries_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ retry rate is high"
+          description: "{{ $labels.service }} is retrying messages from {{ $labels.queue }} at more than 0.2 msg/s for 5 minutes."

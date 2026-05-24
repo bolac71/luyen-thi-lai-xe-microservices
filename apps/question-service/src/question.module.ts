@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
+import { createRabbitMqClientOptions } from '@repo/common';
 import { EventPublisher } from './application/ports/event-publisher.port';
 import { CreateQuestionUseCase } from './application/use-cases/create-question/create-question.use-case';
 import { CreateTopicUseCase } from './application/use-cases/create-topic/create-topic.use-case';
@@ -31,30 +32,14 @@ import { QuestionController } from './presentation/http/question.controller';
       {
         name: RABBITMQ_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'question_service_publish',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'question_service_publish'),
       },
       {
         name: MEDIA_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'media_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'media_service_events'),
       },
     ]),
   ],

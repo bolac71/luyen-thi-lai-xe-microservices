@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
+import { createRabbitMqClientOptions } from '@repo/common';
 import { EventPublisher } from './application/ports/event-publisher.port';
 import { QuestionPoolClient } from './application/ports/question-pool.client';
 import { UserProfileClient } from './application/ports/user-profile.client';
@@ -44,14 +45,8 @@ import { ExamReviewController } from './presentation/http/exam-review.controller
 
 const rmqClientFactory = (queue: string) => ({
   inject: [ConfigService],
-  useFactory: (config: ConfigService) => ({
-    transport: Transport.RMQ as const,
-    options: {
-      urls: [config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672'],
-      queue,
-      queueOptions: { durable: true },
-    },
-  }),
+  useFactory: (config: ConfigService) =>
+    createRabbitMqClientOptions(config, queue),
 });
 
 @Module({
