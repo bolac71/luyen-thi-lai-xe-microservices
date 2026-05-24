@@ -1,12 +1,12 @@
 # Jenkins + GHCR + Docker Compose
 
-Tài liệu này mô tả luồng CI/CD đã được căn chỉnh để deploy được với repo hiện tại.
+Tài liệu này mô tả luồng CI/CD đã được căn chỉnh để triển khai được với repo hiện tại.
 
 ## 1. Mục tiêu
 
 - Pull Request: chạy `lint`, `check-types`, `test`, `build`
-- Merge `main`: build image, push lên GHCR, deploy `staging`
-- Tag release `v*`: build image, phê duyệt thủ công, deploy `production`
+- Merge `main`: build image, push lên GHCR, triển khai `staging`
+- Tag release `v*`: build image, phê duyệt thủ công, triển khai `production`
 
 ## 2. File liên quan
 
@@ -52,7 +52,7 @@ Plugin Jenkins nên có:
 Trên mỗi server:
 
 1. Cài Docker Engine và Docker Compose plugin
-2. Tạo thư mục deploy:
+2. Tạo thư mục triển khai:
 
 ```bash
 sudo mkdir -p /opt/luyen-thi-lai-xe/kong
@@ -80,16 +80,16 @@ Cần điền ít nhất:
 - `STORAGE_ACCOUNT_NAME`
 - `STORAGE_ACCOUNT_KEY`
 
-`IMAGE_TAG` trong file env chỉ là placeholder. Jenkins sẽ override bằng tag mới mỗi lần deploy.
+`IMAGE_TAG` trong file env chỉ là placeholder. Jenkins sẽ ghi đè bằng tag mới ở mỗi lần triển khai.
 
-## 6. Webhook và branch flow
+## 6. Webhook và luồng branch
 
 - Bật multibranch pipeline trong Jenkins
 - Nối webhook GitHub/GitLab vào Jenkins
 - Quy ước:
-  - PR -> chỉ verify
-  - `main` -> deploy staging
-  - tag `v1.0.0` -> deploy production
+  - PR -> chỉ kiểm tra
+  - `main` -> triển khai staging
+  - tag `v1.0.0` -> triển khai production
 
 ## 7. Các biến cần sửa trong Jenkinsfile
 
@@ -118,16 +118,16 @@ Pipeline hiện tại build và push image cho 10 service:
 
 Runner image của tất cả service dùng Prisma đã copy kèm thư mục `prisma/`, vì vậy `prisma migrate deploy` có thể chạy trực tiếp trên server.
 
-## 9. Luồng deploy
+## 9. Luồng triển khai
 
-Script deploy sẽ:
+Script triển khai sẽ:
 
 1. Upload `docker-compose.deploy.yml`
 2. Upload `kong/kong.yaml`
 3. Upload `docker/consul/init.sh`
 4. Upload `docker/keycloak/realm-export.json`
 5. Pull image từ GHCR
-6. Start infrastructure: Postgres, RabbitMQ, Redis, Consul, Consul init, Keycloak
+6. Khởi động infrastructure: Postgres, RabbitMQ, Redis, Consul, Consul init, Keycloak
 7. Chạy `prisma migrate deploy` cho toàn bộ 10 service có Prisma:
    - `identity-service`
    - `user-service`
@@ -139,7 +139,7 @@ Script deploy sẽ:
    - `simulation-service`
    - `media-service`
    - `audit-service`
-8. Start app services + Kong
+8. Khởi động app services + Kong
 9. Smoke check `health/live` và `health/ready` của từng service qua Kong
 
 Smoke check sử dụng service-prefix route:
@@ -161,13 +161,13 @@ Rollback nhanh nhất:
 
 1. Chạy lại job Jenkins với tag cũ
 2. Hoặc đổi `IMAGE_TAG` trong `/opt/luyen-thi-lai-xe/production.env`
-3. Chạy lại script deploy
+3. Chạy lại script triển khai
 
-File `.last-deployed-tag` trên server giúp biết image tag gần nhất đã deploy.
+File `.last-deployed-tag` trên server giúp biết image tag gần nhất đã triển khai.
 
 ## 11. Việc nên làm tiếp sau Phase 2
 
 - Thêm TLS/reverse proxy trước Kong nếu expose ra Internet
-- Bổ sung backup Postgres và restore drill
+- Bổ sung backup Postgres và diễn tập restore
 - Thêm monitoring/alerting cho host, container, DB, RabbitMQ
 - Tối ưu pipeline chỉ build service thay đổi nếu cần giảm thời gian build
