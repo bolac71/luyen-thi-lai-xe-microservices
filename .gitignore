@@ -33,6 +33,7 @@ yarn-error.log*
 pids
 *.pid
 *.seed
+backups/
 
 # Testing
 **/coverage/

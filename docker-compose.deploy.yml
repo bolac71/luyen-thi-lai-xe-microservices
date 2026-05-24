@@ -169,6 +169,57 @@ services:
       timeout: 5s
       retries: 20
 
+  postgres-backup:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    volumes:
+      - ./docker/backup/postgres-daily-backup.sh:/backup/postgres-daily-backup.sh:ro
+      - ./backups:/backups
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      BACKUP_ROOT: /backups/postgres
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      IDENTITY_DB_NAME: ${IDENTITY_DB_NAME:-identity_db}
+      USER_DB_NAME: ${USER_DB_NAME:-user_db}
+      EXAM_DB_NAME: ${EXAM_DB_NAME:-exam_db}
+      COURSE_DB_NAME: ${COURSE_DB_NAME:-course_db}
+      QUESTION_DB_NAME: ${QUESTION_DB_NAME:-question_db}
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-notification_db}
+      ANALYTICS_DB_NAME: ${ANALYTICS_DB_NAME:-analytics_db}
+      SIMULATION_DB_NAME: ${SIMULATION_DB_NAME:-simulation_db}
+      MEDIA_DB_NAME: ${MEDIA_DB_NAME:-media_db}
+      AUDIT_DB_NAME: ${AUDIT_DB_NAME:-audit_db}
+      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak_db}
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    depends_on:
+      db-identity:
+        condition: service_healthy
+      db-user:
+        condition: service_healthy
+      db-exam:
+        condition: service_healthy
+      db-course:
+        condition: service_healthy
+      db-question:
+        condition: service_healthy
+      db-notification:
+        condition: service_healthy
+      db-analytics:
+        condition: service_healthy
+      db-simulation:
+        condition: service_healthy
+      db-media:
+        condition: service_healthy
+      db-audit:
+        condition: service_healthy
+      db-keycloak:
+        condition: service_healthy
+    command: sh /backup/postgres-daily-backup.sh
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     command: sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"

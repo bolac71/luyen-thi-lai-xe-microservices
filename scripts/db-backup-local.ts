@@ -1,36 +1,113 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import type { Dirent, Stats } from 'node:fs';
+import { basename, join } from 'node:path';
 
 type BackupTarget = {
+  serviceName: string;
   container: string;
   database: string;
   user: string;
 };
 
 const backupTargets: BackupTarget[] = [
-  { container: 'db-identity', database: 'identity_db', user: 'user' },
-  { container: 'db-user', database: 'user_db', user: 'user' },
-  { container: 'db-exam', database: 'exam_db', user: 'user' },
-  { container: 'db-course', database: 'course_db', user: 'user' },
-  { container: 'db-question', database: 'question_db', user: 'user' },
-  { container: 'db-notification', database: 'notification_db', user: 'user' },
-  { container: 'db-analytics', database: 'analytics_db', user: 'user' },
-  { container: 'db-simulation', database: 'simulation_db', user: 'user' },
-  { container: 'db-media', database: 'media_db', user: 'user' },
-  { container: 'db-audit', database: 'audit_db', user: 'user' },
-  { container: 'db-keycloak', database: 'keycloak_db', user: 'keycloak' },
+  {
+    serviceName: 'identity-service',
+    container: 'db-identity',
+    database: 'identity_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'user-service',
+    container: 'db-user',
+    database: 'user_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'exam-service',
+    container: 'db-exam',
+    database: 'exam_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'course-service',
+    container: 'db-course',
+    database: 'course_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'question-service',
+    container: 'db-question',
+    database: 'question_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'notification-service',
+    container: 'db-notification',
+    database: 'notification_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'analytics-service',
+    container: 'db-analytics',
+    database: 'analytics_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'simulation-service',
+    container: 'db-simulation',
+    database: 'simulation_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'media-service',
+    container: 'db-media',
+    database: 'media_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'audit-service',
+    container: 'db-audit',
+    database: 'audit_db',
+    user: 'user',
+  },
+  {
+    serviceName: 'keycloak',
+    container: 'db-keycloak',
+    database: 'keycloak_db',
+    user: 'keycloak',
+  },
 ];
 
+const retentionDays = Number(process.env.BACKUP_RETENTION_DAYS ?? '7');
+const nodeEnv = process.env.NODE_ENV ?? 'development-local';
+
 function timestamp(): string {
-  return new Date().toISOString().replace(/[:.]/g, '-');
+  return new Date()
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}Z$/, 'Z');
 }
 
 function main(): void {
-  const backupRoot = join(process.cwd(), 'backups', 'local', timestamp());
-  mkdirSync(backupRoot, { recursive: true });
+  const backupRoot = join(process.cwd(), 'backups', 'postgres', nodeEnv);
+  const backupDir = join(backupRoot, timestamp());
+  const manifestPath = join(backupDir, 'manifest.csv');
 
+  mkdirSync(backupDir, { recursive: true });
+  writeFileSync(manifestPath, 'service,database,container,file\n');
+
+  const failures: string[] = [];
   for (const target of backupTargets) {
+    const fileName = `${target.serviceName}_${nodeEnv}_${basename(backupDir)}.dump`;
+    const filePath = join(backupDir, fileName);
     const result = spawnSync(
       'docker',
       [
@@ -45,7 +122,8 @@ function main(): void {
         target.user,
         '-d',
         target.database,
-        '--format=plain',
+        '--format=custom',
+        '--compress=6',
         '--no-owner',
         '--no-privileges',
       ],
@@ -57,17 +135,57 @@ function main(): void {
 
     if (result.status !== 0) {
       const message = result.stderr.toString('utf8').trim();
-      throw new Error(
-        `Backup failed for ${target.database}: ${message || 'unknown error'}`,
+      failures.push(
+        `${target.serviceName}/${target.database}: ${message || 'unknown error'}`,
       );
+      continue;
     }
 
-    const filePath = join(backupRoot, `${target.database}.sql`);
     writeFileSync(filePath, result.stdout);
+    writeFileSync(
+      manifestPath,
+      `${target.serviceName},${target.database},${target.container},${fileName}\n`,
+      { flag: 'a' },
+    );
     console.log(`[backup] Wrote ${filePath}`);
   }
 
-  console.log(`[backup] Completed local backups in ${backupRoot}`);
+  pruneOldBackups(backupRoot, retentionDays);
+
+  if (failures.length > 0) {
+    console.error('[backup] Failures detected:');
+    for (const failure of failures) {
+      console.error(`- ${failure}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`[backup] Completed local backups in ${backupDir}`);
+}
+
+function pruneOldBackups(backupRoot: string, days: number): void {
+  if (!Number.isFinite(days) || days < 0 || !existsSync(backupRoot)) {
+    return;
+  }
+
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const entries = readdirSync(backupRoot, {
+    withFileTypes: true,
+  }) as Dirent[];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const fullPath = join(backupRoot, entry.name);
+    const stats = statSync(fullPath) as Stats;
+    if (stats.mtimeMs < cutoff) {
+      rmSync(fullPath, { recursive: true, force: true });
+      console.log(`[backup] Pruned old backup directory ${fullPath}`);
+    }
+  }
 }
 
 main();
