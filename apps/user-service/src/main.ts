@@ -1,13 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import {
   ApiExceptionFilter,
   ApiResponseInterceptor,
   AccessLogInterceptor,
+  assertRabbitMqResilienceTopology,
+  createRabbitMqConsumerOptions,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  getRabbitMqUrl,
+  MetricsService,
+  RabbitMqRetryInterceptor,
   setupMicroserviceSwagger,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
@@ -21,21 +25,24 @@ async function bootstrap() {
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   const configService = app.get(ConfigService);
-  const rabbitmqUrl =
-    configService.get<string>('rabbitmq.url') ?? 'amqp://localhost:5672';
+  const rabbitmqUrl = getRabbitMqUrl(configService);
+  const rabbitmqQueue = 'user_service_events';
+  await assertRabbitMqResilienceTopology(rabbitmqUrl, {
+    queue: rabbitmqQueue,
+  });
 
   // Connect RabbitMQ microservice for consuming events
   app
-    .connectMicroservice<MicroserviceOptions>({
-      transport: Transport.RMQ,
-      options: {
-        urls: [rabbitmqUrl],
-        queue: 'user_service_events',
-        queueOptions: { durable: true },
-        noAck: false,
-      },
-    })
-    .useGlobalInterceptors(new CorrelationIdInterceptor());
+    .connectMicroservice(
+      createRabbitMqConsumerOptions({ url: rabbitmqUrl, queue: rabbitmqQueue }),
+    )
+    .useGlobalInterceptors(
+      new CorrelationIdInterceptor(),
+      new RabbitMqRetryInterceptor(
+        { queue: rabbitmqQueue },
+        app.get(MetricsService),
+      ),
+    );
 
   app.enableCors();
   app.use(new CorrelationIdMiddleware().use);

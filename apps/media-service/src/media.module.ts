@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
+import { createRabbitMqClientOptions } from '@repo/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { EventPublisher } from './application/ports/event-publisher.port';
@@ -37,44 +38,20 @@ import { MessagingController } from './presentation/messaging/messaging.controll
       {
         name: RABBITMQ_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'media_service_publish',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'media_service_publish'),
       },
       {
         name: USER_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'user_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'user_service_events'),
       },
       {
         name: COURSE_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'course_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'course_service_events'),
       },
     ]),
   ],

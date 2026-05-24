@@ -105,6 +105,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle ${eventName}: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 }

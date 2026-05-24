@@ -171,12 +171,14 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    command: sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-app}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change-me}
     ports:
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "${RABBITMQ_PROMETHEUS_PORT:-15692}:15692"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:

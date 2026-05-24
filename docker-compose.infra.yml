@@ -174,9 +174,11 @@ services:
   # ── Message Broker ─────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    command: sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"
     ports:
       - "5672:5672"
       - "15672:15672"
+      - "15692:15692"
 
   # ── Token Blacklist Cache ───────────────────────────────────
   redis:

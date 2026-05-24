@@ -61,6 +61,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle media.file.deleted: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 }

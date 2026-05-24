@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
 import { APP_GUARD } from '@nestjs/core';
 import {
   KeycloakConnectModule,
@@ -17,6 +17,7 @@ import Joi from 'joi';
 import {
   AppLoggerModule,
   ConsulConfigFactory,
+  createRabbitMqClientOptions,
   HealthModule,
   MetricsModule,
 } from '@repo/common';
@@ -115,32 +116,17 @@ import { DeleteIdentityUserUseCase } from './application/use-cases/delete-identi
       {
         name: USER_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              configService.get<string>('rabbitmq.url') ??
-                'amqp://localhost:5672',
-            ],
-            queue: 'user_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (configService: ConfigService) =>
+          createRabbitMqClientOptions(configService, 'user_service_events'),
       },
       {
         name: NOTI_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              configService.get<string>('rabbitmq.url') ??
-                'amqp://localhost:5672',
-            ],
-            queue: 'notification_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (configService: ConfigService) =>
+          createRabbitMqClientOptions(
+            configService,
+            'notification_service_events',
+          ),
       },
     ]),
     KeycloakConnectModule.registerAsync({
