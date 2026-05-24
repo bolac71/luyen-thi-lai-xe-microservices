@@ -17,10 +17,7 @@ export class PrismaService
 
   constructor(configService: ConfigService) {
     const connectionString = configService.getOrThrow<string>('database.url');
-
-    super({
-      adapter: new PrismaPg({ connectionString }),
-    });
+    super({ adapter: new PrismaPg({ connectionString }) });
   }
 
   async onModuleInit(): Promise<void> {
@@ -43,7 +40,6 @@ export class PrismaService
         if (attempt === maxAttempts) {
           throw error;
         }
-
         this.logger.warn(
           `Prisma connection attempt ${attempt}/${maxAttempts} failed. Retrying in ${delayMs}ms.`,
         );
