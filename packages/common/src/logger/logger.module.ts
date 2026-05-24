@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
+import { getCurrentCorrelationId } from '../http/correlation-context';
 
 function resolveServiceName(): string {
   return (
@@ -44,6 +45,7 @@ function parseStructuredMessage(message: unknown): Record<string, unknown> {
           info.serviceName = info.serviceName || serviceName;
           info.environment = info.environment || environment;
           info.logType = info.logType || 'application';
+          info.correlationId = info.correlationId || getCurrentCorrelationId();
 
           if (structuredMessage.logType === 'access') {
             info.rawMessage = info.message;

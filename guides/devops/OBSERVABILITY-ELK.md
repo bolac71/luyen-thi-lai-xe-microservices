@@ -1,6 +1,6 @@
-# Phase 6.1 - Logging + ELK
+# Phase 6.1-6.2 - Logging, ELK và Correlation ID
 
-Tài liệu này mô tả phần logging tập trung bằng ELK cho Phase 6.1.
+Tài liệu này mô tả phần logging tập trung bằng ELK cho Phase 6.1 và truy vết request bằng Correlation ID cho Phase 6.2.
 
 ## Mục tiêu
 
@@ -9,6 +9,8 @@ Tài liệu này mô tả phần logging tập trung bằng ELK cho Phase 6.1.
 - Access log có thêm `correlationId`, `method`, `path`, `statusCode`, `latencyMs`, `actorId`, `ipAddress`, `userAgent`.
 - Logstash nhận log qua HTTP `5044`, parse JSON và đẩy vào Elasticsearch index `microservices-logs-*`.
 - Kibana dùng để tìm log theo service, level, `logType` hoặc `correlationId`.
+- Kong nhận hoặc tự tạo `x-correlation-id`, forward xuống service và echo lại response.
+- Correlation ID được giữ trong request context bằng `AsyncLocalStorage`, tự đi vào application log và RabbitMQ event payload.
 
 ## Thành phần
 
@@ -28,6 +30,27 @@ NestJS service
   -> Elasticsearch index microservices-logs-YYYY.MM.dd
   -> Kibana Discover / Dashboard
 ```
+
+## Luồng Correlation ID
+
+```text
+Client
+  -> Kong correlation-id plugin
+  -> x-correlation-id header
+  -> CorrelationIdMiddleware / CorrelationIdInterceptor
+  -> AsyncLocalStorage context
+  -> application log + access log + audit event
+  -> RabbitMQ event payload correlationId
+  -> downstream service log cùng correlationId
+```
+
+Quy tắc:
+
+- Nếu client gửi `x-correlation-id`, hệ thống giữ nguyên ID đó.
+- Nếu client không gửi, Kong tạo ID mới và service fallback tự tạo ID nếu request không đi qua Kong.
+- Response luôn có header `x-correlation-id`.
+- Log trong cùng HTTP request hoặc message handler có cùng `correlationId`.
+- Event publish qua RabbitMQ được enrich thêm field `correlationId` để service nhận có thể tiếp tục trace.
 
 ## Chạy local
 
@@ -101,6 +124,44 @@ logType: "access" and statusCode >= 500
 correlationId: "demo-phase-6-1-*"
 ```
 
+## Verify Phase 6.2
+
+Case 1: Client tự truyền Correlation ID.
+
+```powershell
+$cid = "phase-6-2-" + [guid]::NewGuid().ToString()
+curl.exe -i -H "x-correlation-id: $cid" http://localhost:8000/user-service/health/live
+curl.exe "http://localhost:9200/microservices-logs-*/_search?q=correlationId:$cid&pretty"
+```
+
+Kỳ vọng:
+
+- Response header có `x-correlation-id` đúng bằng `$cid`.
+- Elasticsearch có access log với `correlationId=$cid`.
+
+Case 2: Client không truyền Correlation ID.
+
+```powershell
+curl.exe -i http://localhost:8000/user-service/health/live
+```
+
+Kỳ vọng:
+
+- Kong hoặc service tự tạo `x-correlation-id`.
+- Dùng giá trị header này để query trong Kibana/Elasticsearch.
+
+Case 3: Request tạo event RabbitMQ.
+
+```powershell
+# Gọi một API có publish domain event, ví dụ luồng identity/user/course tùy dữ liệu local.
+# Sau đó query cùng correlationId trong log của service publish và service consume.
+```
+
+Kỳ vọng:
+
+- Service publish log có `correlationId`.
+- Service consume message cũng log cùng `correlationId`.
+
 ## Deploy staging/production
 
 `docker-compose.deploy.yml` đã có:
@@ -130,3 +191,13 @@ Trong production thật, nên giới hạn public access tới Elasticsearch, Lo
 - Kibana query được log theo `serviceName`.
 - Access log query được theo `correlationId`.
 - Deploy compose có ELK và app services có biến `LOGSTASH_HOST`.
+
+## Checklist hoàn thành Phase 6.2
+
+- Kong config có `correlation-id` plugin dùng header `x-correlation-id`.
+- CORS cho phép request header và expose response header `x-correlation-id`.
+- `CorrelationIdMiddleware` gắn ID vào HTTP request/response.
+- `CorrelationIdInterceptor` tạo context cho HTTP và RabbitMQ message handlers.
+- `AppLoggerModule` tự enrich application log bằng correlation ID hiện tại.
+- RabbitMQ event publisher enrich payload bằng `correlationId`.
+- Audit event fallback lấy correlation ID từ request context.
