@@ -81,6 +81,15 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
+            all-services:
+              - '.github/workflows/ci.yml'
+              - 'Dockerfile.service'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'turbo.json'
+              - 'docker/**'
+              - 'deploy/**'
+              - 'consul-seed-*.json'
             identity-service:
               - 'apps/identity-service/**'
               - 'packages/**'
@@ -118,6 +127,14 @@ jobs:
           CHANGED='${{ steps.filter.outputs.changes }}'
           ALL_SERVICES='["identity-service","analytics-service","course-service","exam-service","notification-service","question-service","simulation-service","user-service","media-service","audit-service"]'
           SERVICES="[]"
+
+          if echo "$CHANGED" | jq -e 'index("all-services") != null' > /dev/null; then
+            echo "DevOps/shared build inputs changed -> build all services"
+            SERVICES="$ALL_SERVICES"
+            echo "services=$SERVICES" >> $GITHUB_OUTPUT
+            echo "Final services to build: $SERVICES"
+            exit 0
+          fi
 
           for SERVICE in $(echo $ALL_SERVICES | jq -rc '.[]'); do
             CHANGED_MATCH=$(echo $CHANGED | jq -rc --arg s "$SERVICE" 'map(select(. == $s)) | length')
@@ -178,8 +195,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: |
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
       needs.detect-changes.outputs.services != '[]' &&
       needs.detect-changes.outputs.services != '' &&
       needs.detect-changes.outputs.services != 'null'
@@ -244,6 +259,7 @@ jobs:
           exit-code: "1"
 
       - name: Push Docker Image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -252,6 +268,7 @@ jobs:
 
       - name: Get image size
         id: size
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           docker pull ghcr.io/nhactaohocbai/luyen-thi-lai-xe-${{ matrix.service }}:latest 2>/dev/null || true
           SIZE=$(docker image inspect ghcr.io/nhactaohocbai/luyen-thi-lai-xe-${{ matrix.service }}:latest \
