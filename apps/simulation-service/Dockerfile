@@ -25,6 +25,7 @@ COPY --from=installer /app/apps/simulation-service/node_modules ./apps/simulatio
 COPY --from=pruner /app/out/full/ .
 RUN npx prisma generate --schema=apps/simulation-service/prisma/schema.prisma
 RUN npx turbo build --filter=simulation-service
+RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force && mkdir -p apps/simulation-service/node_modules
 
 # Giai đoạn 4: Runner
 FROM node:20-alpine AS runner

@@ -25,6 +25,7 @@ COPY --from=installer /app/apps/question-service/node_modules ./apps/question-se
 COPY --from=pruner /app/out/full/ .
 RUN npx prisma generate --schema=apps/question-service/prisma/schema.prisma
 RUN npx turbo build --filter=question-service
+RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force && mkdir -p apps/question-service/node_modules
 
 # Giai đoạn 4: Runner
 FROM node:20-alpine AS runner

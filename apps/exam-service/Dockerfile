@@ -25,6 +25,7 @@ COPY --from=installer /app/apps/exam-service/node_modules ./apps/exam-service/no
 COPY --from=pruner /app/out/full/ .
 RUN npx prisma generate --schema=apps/exam-service/prisma/schema.prisma
 RUN npx turbo build --filter=exam-service
+RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force && mkdir -p apps/exam-service/node_modules
 
 # Giai đoạn 4: Runner
 FROM node:20-alpine AS runner

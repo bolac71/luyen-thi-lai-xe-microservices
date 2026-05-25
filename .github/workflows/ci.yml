@@ -252,6 +252,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/nhactaohocbai/luyen-thi-lai-xe-${{ matrix.service }}:${{ github.sha }}
+          scanners: vuln
           format: table
           vuln-type: os,library
           severity: CRITICAL,HIGH

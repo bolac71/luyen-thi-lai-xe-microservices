@@ -21,6 +21,7 @@ COPY --from=installer /app/apps/audit-service/node_modules ./apps/audit-service/
 COPY --from=pruner /app/out/full/ .
 RUN npx prisma generate --schema=apps/audit-service/prisma/schema.prisma
 RUN npx turbo build --filter=audit-service
+RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force && mkdir -p apps/audit-service/node_modules
 
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat openssl

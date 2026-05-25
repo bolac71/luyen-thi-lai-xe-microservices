@@ -27,6 +27,7 @@ COPY --from=installer /app/apps/identity-service/node_modules ./apps/identity-se
 COPY --from=pruner /app/out/full/ .
 RUN npx prisma generate --schema=apps/identity-service/prisma/schema.prisma
 RUN npx turbo build --filter=identity-service
+RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force && mkdir -p apps/identity-service/node_modules
 
 # Giai đoạn 4: Runner
 FROM node:20-alpine AS runner
