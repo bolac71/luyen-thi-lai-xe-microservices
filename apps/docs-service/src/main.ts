@@ -8,6 +8,7 @@ import {
   ApiResponseInterceptor,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  setupCors,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
@@ -17,6 +18,7 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  setupCors(app);
   app.use(new CorrelationIdMiddleware().use);
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalInterceptors(
