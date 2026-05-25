@@ -33,4 +33,5 @@ export * from './metrics';
 export * from './messaging';
 
 // ============== SWAGGER =========================
+export * from './config/cors.setup';
 export * from './config/swagger.setup';
