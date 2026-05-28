@@ -42,7 +42,7 @@ export class PrismaSimulationRepository extends SimulationRepository {
     licenseCategory: LicenseCategory,
   ): Promise<ManeuverErrorRecord[]> {
     return this.prisma.maneuverError.findMany({
-      where: { licenseCategory },
+      where: { licenseCategory, isGeneral: true, isActive: true },
       orderBy: { code: 'asc' },
     });
   }

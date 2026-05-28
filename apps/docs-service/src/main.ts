@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
+import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import {
@@ -8,10 +9,14 @@ import {
   ApiResponseInterceptor,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  installLocalDevTransientErrorGuard,
+  runBootstrapWithRetries,
   setupCors,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
+
+installLocalDevTransientErrorGuard('docs-service');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,7 +29,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new CorrelationIdInterceptor(),
     new AccessLogInterceptor({ serviceName: 'docs-service' }),
-    new ApiResponseInterceptor(),
+    new ApiResponseInterceptor(app.get(Reflector)),
   );
   app.useGlobalFilters(new ApiExceptionFilter());
 
@@ -52,4 +57,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Docs Service running at http://localhost:${port}/docs`);
 }
-bootstrap();
+void runBootstrapWithRetries('docs-service', bootstrap);

@@ -29,8 +29,15 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps ./apps
 COPY --from=deps /app/packages ./packages
 COPY . .
+RUN npm --workspace=apps/${SERVICE_NAME} run prisma:generate
 RUN npx turbo build --filter=${SERVICE_NAME}
-RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force
+RUN CLIENT_NAME="$(echo ${SERVICE_NAME} | sed 's/-service$/-client/')" && \
+    mkdir -p /tmp/prisma-generated && \
+    cp -R "node_modules/@prisma/${CLIENT_NAME}" "/tmp/prisma-generated/${CLIENT_NAME}" && \
+    npm prune --omit=dev --legacy-peer-deps && \
+    mkdir -p node_modules/@prisma && \
+    cp -R "/tmp/prisma-generated/${CLIENT_NAME}" "node_modules/@prisma/${CLIENT_NAME}" && \
+    npm cache clean --force
 
 FROM node:20-alpine AS runner
 ARG SERVICE_NAME

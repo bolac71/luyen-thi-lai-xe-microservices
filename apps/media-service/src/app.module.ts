@@ -36,6 +36,7 @@ import { MediaModule } from './media.module';
     }),
     MetricsModule.register({ serviceName: 'media-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({

@@ -89,9 +89,11 @@ export class ApiResponseInterceptor<T>
     const httpContext = context.switchToHttp();
     const request = httpContext.getRequest<Request>();
     const response = httpContext.getResponse<Response>();
+    const path = request.originalUrl ?? request.url;
     const skipApiResponse =
-      request.originalUrl?.startsWith('/metrics') ||
-      request.url.startsWith('/metrics') ||
+      path.startsWith('/metrics') ||
+      path.startsWith('/docs-config') ||
+      path.startsWith('/docs-json') ||
       this.reflector?.getAllAndOverride<boolean>('skip-api-response', [
         context.getHandler(),
         context.getClass(),

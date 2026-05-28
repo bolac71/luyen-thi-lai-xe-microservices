@@ -11,9 +11,42 @@ interface ConsulKVEntry {
   value: string;
 }
 
+loadLocalEnvFile();
+
 const CONSUL_URL = process.env.CONSUL_URL || 'http://localhost:8500';
 const DEFAULT_ENV = process.env.ENV || 'development';
 const PLACEHOLDER_PATTERN = /\$\{([A-Z0-9_]+)(?::-(.*?))?\}/g;
+
+function loadLocalEnvFile(): void {
+  const envFile = path.join(__dirname, '../.env');
+  if (!fs.existsSync(envFile)) {
+    return;
+  }
+
+  const lines = fs.readFileSync(envFile, 'utf-8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] ??= value;
+  }
+}
 
 function resolvePlaceholders(value: string, env: string): string {
   return value.replace(

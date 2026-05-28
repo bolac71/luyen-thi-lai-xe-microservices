@@ -28,6 +28,9 @@ export class DomainExceptionFilter implements ExceptionFilter {
       COURSE_CAPACITY_EXCEEDED: HttpStatus.UNPROCESSABLE_ENTITY,
       STUDENT_LICENSE_NOT_ASSIGNED: HttpStatus.UNPROCESSABLE_ENTITY,
       STUDENT_LICENSE_MISMATCH: HttpStatus.UNPROCESSABLE_ENTITY,
+      COURSE_CODE_ALREADY_EXISTS: HttpStatus.CONFLICT,
+      COURSE_VERSION_CONFLICT: HttpStatus.CONFLICT,
+      COURSE_HAS_ACTIVE_ENROLLMENTS: HttpStatus.CONFLICT,
     };
 
     const status = statusMap[exception.code] ?? HttpStatus.BAD_REQUEST;
