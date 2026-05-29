@@ -21,11 +21,6 @@
       "database.url": "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@localhost:5432/identity_db",
       "database.pool_size": "10",
       "database.connection_timeout": "5000",
-      "keycloak.authServerUrl": "http://localhost:8080",
-      "keycloak.realm": "luyen-thi-lai-xe-realm",
-      "keycloak.clientId": "nestjs-backend",
-      "keycloak.clientSecret": "${KEYCLOAK_CLIENT_SECRET:-change-me}",
-      "keycloak.timeoutMs": "3000",
       "rabbitmq.url": "amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@localhost:5672",
       "rabbitmq.username": "${RABBITMQ_DEFAULT_USER:-guest}",
       "rabbitmq.password": "${RABBITMQ_DEFAULT_PASS:-guest}",
@@ -67,10 +62,10 @@
       "database.url": "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@localhost:5436/question_db",
       "rabbitmq.url": "amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@localhost:5672",
       "keycloak.authServerUrl": "http://localhost:8080",
-      "keycloak.realm": "luyen-thi-lai-xe-realm",
-      "keycloak.clientId": "nestjs-backend",
+      "keycloak.realm": "${KEYCLOAK_REALM:-luyen-thi-lai-xe-realm}",
+      "keycloak.clientId": "${KEYCLOAK_CLIENT_ID:-nestjs-backend}",
       "keycloak.clientSecret": "${KEYCLOAK_CLIENT_SECRET:-change-me}",
-      "keycloak.timeoutMs": "3000"
+      "keycloak.timeoutMs": "${KEYCLOAK_TIMEOUT_MS:-10000}"
     },
     "course-service": {
       "port": "3004",
@@ -80,16 +75,6 @@
       "keycloak.authServerUrl": "http://localhost:8080",
       "keycloak.realm": "luyen-thi-lai-xe-realm",
       "keycloak.clientId": "nestjs-backend",
-      "keycloak.clientSecret": "${KEYCLOAK_CLIENT_SECRET:-change-me}",
-      "keycloak.timeoutMs": "${KEYCLOAK_TIMEOUT_MS:-10000}"
-    },
-    "question-service": {
-      "port": "3005",
-      "database.url": "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@127.0.0.1:5436/${QUESTION_DB_NAME:-question_db}",
-      "rabbitmq.url": "amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@127.0.0.1:5672",
-      "keycloak.authServerUrl": "http://localhost:8080",
-      "keycloak.realm": "${KEYCLOAK_REALM:-luyen-thi-lai-xe-realm}",
-      "keycloak.clientId": "${KEYCLOAK_CLIENT_ID:-nestjs-backend}",
       "keycloak.clientSecret": "${KEYCLOAK_CLIENT_SECRET:-change-me}",
       "keycloak.timeoutMs": "${KEYCLOAK_TIMEOUT_MS:-10000}"
     },
