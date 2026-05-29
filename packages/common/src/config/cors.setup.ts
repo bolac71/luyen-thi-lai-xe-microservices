@@ -18,13 +18,18 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 function getAllowedOrigins(): string[] {
-  const configured = process.env.CORS_ALLOWED_ORIGINS;
+  const configured =
+    process.env.CORS_ALLOWED_ORIGINS ?? process.env.KONG_CORS_ORIGINS;
   if (!configured) return DEFAULT_ALLOWED_ORIGINS;
 
-  return configured
+  const configuredOrigins = configured
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+
+  return Array.from(
+    new Set([...configuredOrigins, ...DEFAULT_ALLOWED_ORIGINS]),
+  );
 }
 
 export function setupCors(app: INestApplication): void {

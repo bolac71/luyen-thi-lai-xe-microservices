@@ -36,6 +36,7 @@ import { QuestionModule } from './question.module';
     }),
     MetricsModule.register({ serviceName: 'question-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({

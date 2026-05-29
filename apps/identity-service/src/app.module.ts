@@ -71,6 +71,7 @@ import { DeleteIdentityUserUseCase } from './application/use-cases/delete-identi
     MetricsModule.register({ serviceName: 'identity-service' }),
     HttpModule,
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({

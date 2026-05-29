@@ -43,6 +43,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     }),
     MetricsModule.register({ serviceName: 'audit-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({

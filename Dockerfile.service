@@ -29,6 +29,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps ./apps
 COPY --from=deps /app/packages ./packages
 COPY . .
+RUN npm --workspace=apps/${SERVICE_NAME} run prisma:generate
 RUN npx turbo build --filter=${SERVICE_NAME}
 # Generate Prisma client BEFORE npm prune (prisma is a devDep and will be removed).
 # Back up the whole @prisma dir so npm prune cannot remove the generated client.

@@ -10,11 +10,15 @@ import {
   AccessLogInterceptor,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  installLocalDevTransientErrorGuard,
+  runBootstrapWithRetries,
   setupMicroserviceSwagger,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
+
+installLocalDevTransientErrorGuard('identity-service');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -44,4 +48,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Identity Service listening on port ${port}`);
 }
-void bootstrap();
+void runBootstrapWithRetries('identity-service', bootstrap);

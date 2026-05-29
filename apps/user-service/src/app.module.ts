@@ -36,6 +36,7 @@ import { UserModule } from './user.module';
     }),
     MetricsModule.register({ serviceName: 'user-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({

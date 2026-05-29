@@ -36,6 +36,7 @@ import { ExamModule } from './exam.module';
     }),
     MetricsModule.register({ serviceName: 'exam-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({
