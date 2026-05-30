@@ -3,14 +3,14 @@ import { INestApplication } from '@nestjs/common';
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'http://localhost:3009', // docs-service (Swagger aggregator)
+  'http://localhost:3009',
   'http://localhost:4173',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:4200',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
-  'http://127.0.0.1:3009', // docs-service (Swagger aggregator)
+  'http://127.0.0.1:3009',
   'http://127.0.0.1:4173',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
@@ -18,13 +18,18 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 function getAllowedOrigins(): string[] {
-  const configured = process.env.CORS_ALLOWED_ORIGINS;
+  const configured =
+    process.env.CORS_ALLOWED_ORIGINS ?? process.env.KONG_CORS_ORIGINS;
   if (!configured) return DEFAULT_ALLOWED_ORIGINS;
 
-  return configured
+  const configuredOrigins = configured
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+
+  return Array.from(
+    new Set([...configuredOrigins, ...DEFAULT_ALLOWED_ORIGINS]),
+  );
 }
 
 export function setupCors(app: INestApplication): void {

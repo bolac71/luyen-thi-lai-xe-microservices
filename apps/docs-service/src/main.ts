@@ -8,10 +8,14 @@ import {
   ApiResponseInterceptor,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  installLocalDevTransientErrorGuard,
+  runBootstrapWithRetries,
   setupCors,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
+
+installLocalDevTransientErrorGuard('docs-service');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -52,4 +56,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Docs Service running at http://localhost:${port}/docs`);
 }
-bootstrap();
+void runBootstrapWithRetries('docs-service', bootstrap);

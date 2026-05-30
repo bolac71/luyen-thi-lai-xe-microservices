@@ -13,13 +13,17 @@ import {
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
   getRabbitMqUrl,
+  installLocalDevTransientErrorGuard,
   MetricsService,
   RabbitMqRetryInterceptor,
+  runBootstrapWithRetries,
   setupMicroserviceSwagger,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
+
+installLocalDevTransientErrorGuard('exam-service');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -67,4 +71,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Exam Service listening on port ${port}`);
 }
-void bootstrap();
+void runBootstrapWithRetries('exam-service', bootstrap);

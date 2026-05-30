@@ -11,10 +11,15 @@ import {
   AccessLogInterceptor,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  installLocalDevTransientErrorGuard,
+  runBootstrapWithRetries,
   setupMicroserviceSwagger,
   WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
+import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
+
+installLocalDevTransientErrorGuard('simulation-service');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,7 +34,7 @@ async function bootstrap() {
     new ApiResponseInterceptor(app.get(Reflector)),
   );
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
-  app.useGlobalFilters(new ApiExceptionFilter());
+  app.useGlobalFilters(new ApiExceptionFilter(), new DomainExceptionFilter());
 
   // Cấu hình Swagger
   setupMicroserviceSwagger(app, {
@@ -43,4 +48,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Simulation Service listening on port ${port}`);
 }
-void bootstrap();
+void runBootstrapWithRetries('simulation-service', bootstrap);
