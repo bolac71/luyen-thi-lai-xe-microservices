@@ -228,10 +228,7 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
   - Kubernetes baseline dùng Helm chart tại `charts/luyen-thi-lai-xe`.
   - Target hiện tại là K3s VPS, self-contained dependencies trong cluster.
   - Hướng dẫn setup nằm ở `guides/devops/PHASE5-KUBERNETES.md`.
-- Health endpoints chuẩn:
-  - `/health`
-  - `/health/live`
-  - `/health/ready`
+- Health endpoints chuẩn: `/health`, `/health/live`, `/health/ready` (Xem đặc tả tại [api-spec-health-metrics.md](./guides/api/api-spec-health-metrics.md))
 - Smoke test cấp root ở [scripts/smoke.ts](./scripts/smoke.ts)
 - Bộ điều phối migration cấp root ở [scripts/prisma-migrate-all.ts](./scripts/prisma-migrate-all.ts)
 - Bộ điều phối seed cấp root ở [scripts/prisma-seed-all.ts](./scripts/prisma-seed-all.ts)

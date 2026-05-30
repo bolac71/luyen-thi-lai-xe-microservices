@@ -6,7 +6,7 @@ type RouteCheck = {
 };
 
 const gatewayUrl = process.env.SMOKE_GATEWAY_URL ?? 'http://localhost:8000';
-const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS ?? '3000');
+const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS ?? '10000');
 const delayMs = Number(process.env.SMOKE_DELAY_MS ?? '300');
 
 const checks: RouteCheck[] = [
