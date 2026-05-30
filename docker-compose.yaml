@@ -280,6 +280,7 @@ services:
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
       - LOGSTASH_HOST=logstash
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3001:3000"
     restart: unless-stopped
@@ -316,6 +317,7 @@ services:
       - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3002:3000"
     restart: unless-stopped
@@ -352,6 +354,7 @@ services:
       - QUESTION_SERVICE_URL=http://question-service:3000
       - USER_SERVICE_URL=http://user-service:3000
       - LOGSTASH_HOST=logstash
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3003:3000"
     restart: unless-stopped
@@ -386,6 +389,7 @@ services:
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
       - LOGSTASH_HOST=logstash
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3004:3000"
     restart: unless-stopped
@@ -420,6 +424,7 @@ services:
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
       - LOGSTASH_HOST=logstash
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3005:3000"
     restart: unless-stopped
@@ -454,6 +459,7 @@ services:
       - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3006:3000"
     restart: unless-stopped
@@ -489,6 +495,7 @@ services:
       - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3007:3000"
     restart: unless-stopped
@@ -525,6 +532,7 @@ services:
       - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3008:3000"
     restart: unless-stopped
@@ -565,6 +573,7 @@ services:
       - STORAGE_CONTAINER_NAME=${STORAGE_CONTAINER_NAME:-media}
       - STORAGE_PRESIGNED_URL_EXPIRY=${STORAGE_PRESIGNED_URL_EXPIRY:-3600}
       - LOGSTASH_HOST=logstash
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3010:3000"
     restart: unless-stopped
@@ -599,6 +608,7 @@ services:
       - KEYCLOAK_REALM=luyen-thi-lai-xe-realm
       - KEYCLOAK_CLIENT_ID=nestjs-backend
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "3011:3000"
     restart: unless-stopped

@@ -143,7 +143,7 @@ function withCredentials(
   }
 }
 
-export function createRabbitMqQueueOptions(queue: string): {
+export function createRabbitMqQueueOptions(_queue: string): {
   durable: boolean;
   arguments: Record<string, string>;
 } {

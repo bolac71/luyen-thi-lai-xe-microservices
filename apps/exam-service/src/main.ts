@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import {
   ApiExceptionFilter,
   ApiResponseInterceptor,
@@ -55,7 +55,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new CorrelationIdInterceptor(),
     new AccessLogInterceptor({ serviceName: 'exam-service' }),
-    new ApiResponseInterceptor(),
+    new ApiResponseInterceptor(app.get(Reflector)),
   );
   app.useGlobalFilters(new ApiExceptionFilter(), new DomainExceptionFilter());
 

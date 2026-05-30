@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import {
@@ -54,7 +54,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new CorrelationIdInterceptor(),
     new AccessLogInterceptor({ serviceName: 'user-service' }),
-    new ApiResponseInterceptor(),
+    new ApiResponseInterceptor(app.get(Reflector)),
   );
   app.useGlobalFilters(new ApiExceptionFilter(), new DomainExceptionFilter());
 
