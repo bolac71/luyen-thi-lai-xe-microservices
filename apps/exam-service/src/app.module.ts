@@ -6,6 +6,8 @@ import {
   ConsulConfigFactory,
   HealthModule,
   MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
 } from '@repo/common';
 import Joi from 'joi';
 import {
@@ -97,10 +99,12 @@ import { ExamModule } from './exam.module';
       }),
     }),
     ExamModule,
+    TokenBlacklistModule,
   ],
   controllers: [],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

@@ -24,7 +24,15 @@ export class ResetEnrollmentProgressUseCase
     );
     if (!enrollment)
       throw new EnrollmentNotFoundException(command.enrollmentId);
-    if (enrollment.studentId !== command.studentId) {
+
+    const actorRole = command.auditContext?.actorRole ?? '';
+    const isStaff =
+      actorRole === 'ADMIN' ||
+      actorRole === 'CENTER_MANAGER' ||
+      actorRole === 'realm:ADMIN' ||
+      actorRole === 'realm:CENTER_MANAGER';
+
+    if (!isStaff && enrollment.studentId !== command.studentId) {
       throw new EnrollmentUnauthorizedException(command.enrollmentId);
     }
 

@@ -26,10 +26,10 @@ import { AuthController } from './presentation/http/auth.controller';
 import { AdminController } from './presentation/http/admin.controller';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
 import {
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
   TokenBlacklistService,
-  REDIS_CLIENT,
-} from './infrastructure/token-blacklist/token-blacklist.service';
-import { TokenBlacklistGuard } from './infrastructure/guards/token-blacklist.guard';
+} from '@repo/common';
 import { KeycloakAdminService } from './infrastructure/keycloak-admin/keycloak-admin.service';
 import {
   IdentityEventPublisher,
@@ -155,6 +155,7 @@ import { DeleteIdentityUserUseCase } from './application/use-cases/delete-identi
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [AuthController, AdminController],
   providers: [
@@ -162,9 +163,8 @@ import { DeleteIdentityUserUseCase } from './application/use-cases/delete-identi
     KeycloakAdminService,
     IdentityEventPublisher,
     RabbitMqAuditPublisher,
-    TokenBlacklistService,
     { provide: IdentityProviderPort, useExisting: KeycloakAdminService },
-    { provide: TokenBlacklistPort, useExisting: TokenBlacklistService },
+    { provide: TokenBlacklistPort, useClass: TokenBlacklistService },
     {
       provide: IdentityEventPublisherPort,
       useExisting: IdentityEventPublisher,
@@ -182,15 +182,6 @@ import { DeleteIdentityUserUseCase } from './application/use-cases/delete-identi
     ChangeUserRoleUseCase,
     LockUserUseCase,
     DeleteIdentityUserUseCase,
-    {
-      provide: REDIS_CLIENT,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const redisUrl =
-          configService.get<string>('redis.url') ?? 'redis://localhost:6379';
-        return new Redis(redisUrl);
-      },
-    },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: JwtRoleGuard },

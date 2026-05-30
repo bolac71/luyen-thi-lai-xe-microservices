@@ -90,7 +90,7 @@ export class EnrollmentController {
   }
 
   @Post(':id/reset-progress')
-  @Roles({ roles: ['realm:STUDENT'] })
+  @Roles({ roles: ['realm:STUDENT', 'realm:ADMIN', 'realm:CENTER_MANAGER'] })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset current student enrollment progress' })
   async resetProgress(

@@ -17,6 +17,8 @@ import {
   ConsulConfigFactory,
   HealthModule,
   MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
 } from '@repo/common';
 import Joi from 'joi';
 import {
@@ -139,6 +141,7 @@ import { SimulationController } from './presentation/http/simulation.controller'
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [SimulationController],
   providers: [
@@ -177,6 +180,7 @@ import { SimulationController } from './presentation/http/simulation.controller'
     EndPractice2dSessionUseCase,
     GetPractice2dSessionUseCase,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

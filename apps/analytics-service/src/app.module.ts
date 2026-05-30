@@ -16,6 +16,8 @@ import {
   ConsulConfigFactory,
   HealthModule,
   MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
 } from '@repo/common';
 import Joi from 'joi';
 import { LearningProgressRepository } from './domain/repositories/learning-progress.repository';
@@ -103,6 +105,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [AnalyticsController, MessagingController],
   providers: [
@@ -131,6 +134,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     GetProgressUseCase,
     RecordLearningEventUseCase,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],
