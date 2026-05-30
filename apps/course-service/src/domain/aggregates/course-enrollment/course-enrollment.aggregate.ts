@@ -16,6 +16,7 @@ export class CourseEnrollment extends AggregateRoot<string> {
   private _progress: number;
   private _enrolledAt: Date;
   private _completedAt: Date | null;
+  private _lastResetAt: Date | null;
 
   private constructor(
     id: string,
@@ -25,6 +26,7 @@ export class CourseEnrollment extends AggregateRoot<string> {
     progress: number,
     enrolledAt: Date,
     completedAt: Date | null,
+    lastResetAt: Date | null,
   ) {
     super(id);
     this._courseId = courseId;
@@ -33,6 +35,7 @@ export class CourseEnrollment extends AggregateRoot<string> {
     this._progress = progress;
     this._enrolledAt = enrolledAt;
     this._completedAt = completedAt;
+    this._lastResetAt = lastResetAt;
   }
 
   static create(props: CreateEnrollmentProps): CourseEnrollment {
@@ -43,6 +46,7 @@ export class CourseEnrollment extends AggregateRoot<string> {
       EnrollmentStatus.ACTIVE,
       0,
       new Date(),
+      null,
       null,
     );
   }
@@ -56,6 +60,7 @@ export class CourseEnrollment extends AggregateRoot<string> {
       props.progress,
       props.enrolledAt,
       props.completedAt,
+      props.lastResetAt,
     );
   }
 
@@ -96,6 +101,7 @@ export class CourseEnrollment extends AggregateRoot<string> {
     this._status = EnrollmentStatus.ACTIVE;
     this._progress = 0;
     this._completedAt = null;
+    this._lastResetAt = new Date();
     this.addDomainEvent(
       new CourseEnrollmentProgressResetEvent(
         this._id,
@@ -122,5 +128,8 @@ export class CourseEnrollment extends AggregateRoot<string> {
   }
   get completedAt(): Date | null {
     return this._completedAt;
+  }
+  get lastResetAt(): Date | null {
+    return this._lastResetAt;
   }
 }

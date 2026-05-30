@@ -122,6 +122,7 @@ model CourseEnrollment {
   progress    Int              @default(0)
   enrolledAt  DateTime         @default(now())
   completedAt DateTime?
+  lastResetAt DateTime?
 
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 

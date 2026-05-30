@@ -5,6 +5,7 @@ import { UserLockedEvent } from '../../events/user-locked.event';
 import { UserRoleChangedEvent } from '../../events/user-role-changed.event';
 import { UserUpdatedEvent } from '../../events/user-updated.event';
 import { IdentityUserAlreadyDeletedException } from '../../exceptions/identity-user-already-deleted.exception';
+import { IdentityUserAlreadyInStateException } from '../../exceptions/identity-user-already-in-state.exception';
 import { Email } from '../../value-objects/email.vo';
 import {
   CreateIdentityUserProps,
@@ -81,6 +82,9 @@ export class IdentityUser extends AggregateRoot<string> {
 
   lock(locked: boolean): void {
     this.ensureNotDeleted();
+    if (this._isActive === !locked) {
+      throw new IdentityUserAlreadyInStateException(this.id, locked);
+    }
     this._isActive = !locked;
     this.touch();
     this.addDomainEvent(new UserLockedEvent(this.id, locked));
