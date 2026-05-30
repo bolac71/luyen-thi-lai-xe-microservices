@@ -136,6 +136,32 @@ PRODUCTION_STORAGE_ACCOUNT_KEY
 
 `GHCR_PULL_TOKEN` nên là GitHub token có quyền pull packages từ GHCR sau khi workflow build image xong.
 
+## Pull Image Từ GHCR
+
+GCP/GKE không build source code. Cluster chỉ pull image đã có trên GHCR theo tag được truyền vào Helm.
+
+Pattern image hiện tại:
+
+```text
+ghcr.io/nhactaohocbai/luyen-thi-lai-xe-<service>:<tag>
+ghcr.io/nhactaohocbai/luyen-thi-lai-xe-migration-runner:<tag>
+```
+
+Với deploy thủ công, có thể dùng một Git SHA tag đã tồn tại trên GHCR:
+
+```bash
+helm upgrade --install luyen-thi-lai-xe charts/luyen-thi-lai-xe \
+  --namespace staging \
+  --create-namespace \
+  --wait \
+  --wait-for-jobs \
+  --timeout 25m \
+  --set global.imageTag=<existing-ghcr-tag> \
+  --set migration.imageTag=<existing-ghcr-tag>
+```
+
+Nếu dùng cùng một `global.imageTag`, tag đó cần tồn tại cho đủ 10 production service images. Nếu GHCR package là private, cần cấu hình `GHCR_PULL_USERNAME` và `GHCR_PULL_TOKEN`.
+
 ## Kiểm tra Helm trên local
 
 ```bash

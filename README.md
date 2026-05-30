@@ -232,6 +232,7 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
 - Deployment Phase 5:
   - Kubernetes baseline dùng Helm chart tại `charts/luyen-thi-lai-xe`.
   - Target hiện tại là GCP/GKE, self-contained dependencies trong cluster cho giai đoạn MVP.
+  - GCP/GKE chỉ pull image từ GHCR theo tag được truyền vào Helm; không build source code trên GCP.
   - K3s/VPS chỉ còn là hướng lab hoặc fallback legacy, không phải target production chính.
   - Hướng dẫn setup nằm ở `guides/devops/PHASE5-KUBERNETES.md`.
   - Checklist GCP chi tiết nằm ở `guides/devops/GCP-SETUP.md`.

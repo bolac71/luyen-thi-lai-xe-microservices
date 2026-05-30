@@ -102,6 +102,7 @@ Luồng production/staging hiện chốt **10 application services**:
   - Hardcoded secrets trong Compose/Consul seed đã được chuyển dần sang env variable hoặc placeholder.
 - Registry:
   - GHCR image naming: `ghcr.io/<owner>/luyen-thi-lai-xe-<service>:<tag>`.
+  - GCP/GKE chỉ pull image đã có từ GHCR khi deploy; source code không build trên GCP.
 
 ### Deployment Runtime
 
