@@ -483,12 +483,12 @@ jobs:
           fs.writeFileSync(env.HELM_VALUES_FILE, JSON.stringify(values, null, 2));
           NODE
 
-      - name: Auto-heal stuck Helm release
+      - name: Auto-heal stuck Helm release and cleanup old jobs
         shell: bash
         run: |
           set -euo pipefail
           
-          # Kiểm tra xem release có tồn tại và đang bị kẹt hay không
+          # 1. Tự động gỡ kẹt release Helm nếu có
           STATUS=$(helm list -n staging -f "^luyen-thi-lai-xe$" -o json | jq -r '.[0].status // empty')
           echo "Current Helm release status: $STATUS"
           
@@ -501,13 +501,18 @@ jobs:
             if [[ -n "$STUCK_REVISION" ]]; then
               echo "🗑️ Deleting stuck Helm release secret for revision v$STUCK_REVISION..."
               kubectl delete secret "sh.helm.release.v1.luyen-thi-lai-xe.v$STUCK_REVISION" -n staging || true
-              echo "✅ Stuck release state cleared. Next helm upgrade can proceed safely."
+              echo "✅ Stuck release state cleared."
             else
               echo "⚠️ Could not identify stuck revision from history. Proceeding anyway..."
             fi
           else
             echo "✅ Helm release is not stuck (Status: '${STATUS:-not-deployed}'). No action needed."
           fi
+
+          # 2. Dọn dẹp các Job cũ để tránh lỗi immutable khi Helm upgrade
+          echo "🧹 Cleaning up old Jobs to avoid immutable field errors..."
+          kubectl delete jobs -n staging -l app.kubernetes.io/instance=luyen-thi-lai-xe --ignore-not-found
+          echo "✅ Old jobs cleanup completed."
 
       - name: Deploy Helm release
         shell: bash
