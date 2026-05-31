@@ -100,6 +100,7 @@ Nếu internet, GitHub Actions hoặc GCP gặp vấn đề:
   - `guides/devops/JENKINS-DOCKER-COMPOSE.md`
   - `charts/luyen-thi-lai-xe/values.yaml`
   - `guides/devops/GCP-SETUP.md`
+  - `guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md`
   - `DEVOPS-SUMMARY.md`
 
 ## 4. Mở bài
@@ -198,6 +199,7 @@ Mở file:
 - `.github/workflows/pr-validation.yml`
 - `.github/workflows/ci.yml`
 - `.github/workflows/production-release.yml`
+- `.github/workflows/rollback-release.yml`
 
 ### 7.1. Pull Request Validation
 
@@ -227,11 +229,21 @@ Lời thoại tiếp:
 
 > Sau build, workflow scan Trivy rồi push image lên GHCR với 2 tag: Git SHA và `latest`. Git SHA dùng cho staging/production vì immutable; `latest` chỉ tiện cho demo nhanh.
 
+Phase 8 trong GitHub Actions:
+
+> Sau Trivy, pipeline sinh SBOM dạng SPDX cho từng image và upload thành artifact. Khi push image lên GHCR, pipeline ký immutable tag `${github.sha}` bằng Cosign keyless signing, gắn SBOM attestation và verify chữ ký. Nhờ vậy release artifact có thể audit dependency và truy vết nguồn gốc build từ GitHub Actions.
+
 ### 7.3. Production Release
 
 Lời thoại gợi ý:
 
 > Production không tự deploy mỗi lần push. Production release là manual workflow, yêu cầu nhập `image_tag` và có GitHub Environment `production` để bật reviewer/manual approval. Đây là cách giảm rủi ro khi đưa code lên production.
+
+### 7.4. Rollback Release
+
+Lời thoại gợi ý:
+
+> Nếu deploy lỗi, nhóm có workflow `Rollback Release`. Workflow yêu cầu chọn môi trường, nhập Helm revision, bật xác nhận rollback, sau đó chạy `helm rollback`, chờ rollout, smoke test và ghi deployment event cho DORA.
 
 ## 8. Demo 3 - GHCR Image Registry
 
@@ -560,7 +572,7 @@ Trả lời:
 
 Trả lời:
 
-> Có baseline DevSecOps: Trivy scan image với HIGH/CRITICAL gate, hardcoded secrets được chuyển sang env/placeholder, runtime image prune dev dependencies và loại `npm/npx/corepack/yarn` để giảm CVE surface. Phần hardening tiếp theo là SBOM, Cosign signing, provenance và secret manager chính thức.
+> Có baseline DevSecOps: Trivy scan image với HIGH/CRITICAL gate, hardcoded secrets được chuyển sang env/placeholder, runtime image prune dev dependencies và loại `npm/npx/corepack/yarn` để giảm CVE surface. Phase 8 trên GitHub Actions đã thêm SBOM artifact, Cosign keyless signing và SBOM attestation cho immutable image tag. Phần hardening tiếp theo là secret manager chính thức và admission policy bắt buộc verify signature ở Kubernetes.
 
 ### Nếu service chết thì Kubernetes phát hiện thế nào?
 
@@ -659,7 +671,7 @@ Slide 5 - Roadmap:
 - HPA/load test.
 - Google Secret Manager.
 - Cloud SQL/PITR.
-- SBOM/Cosign.
+- Admission policy verify Cosign signature.
 
 ## 20. Kết bài ngắn gọn
 

@@ -223,7 +223,7 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
 - Trạng thái tổng quan:
   - MVP/local/GCP đã khá đầy đủ: Docker, Kong, Consul, RabbitMQ, Keycloak, ELK, Prometheus/Grafana, backup, runbook.
   - CI/CD đã có PR validation, main image release, Trivy scan và production release thủ công bằng immutable image tag.
-  - Production hardening còn thiếu: secret manager chính thức, SBOM/signing, rollback workflow riêng, load test, HPA và Terraform.
+  - Production hardening còn thiếu: secret manager chính thức, load test, HPA và Terraform. SBOM/signing và rollback workflow đã có baseline trong GitHub Actions.
 - Production scope đã chốt: 10 services; `docs-service` chỉ dùng cho Dev.
 - CI/CD Phase 4:
   - Pull Request Validation: quality gate, build image, Trivy scan, không push image.
@@ -237,6 +237,7 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
   - DORA Grafana Dashboard Phase 5: export DORA JSON sang Prometheus metrics và hiển thị dashboard theo `guides/devops/DORA-GRAFANA-DASHBOARD.md`.
   - OpenTelemetry/Jaeger Phase 6: trace end-to-end từ Kong đến NestJS services theo `guides/devops/OPENTELEMETRY-JAEGER-TRACING.md`.
   - Business Metrics Phase 7: đo user mới, lượt làm bài thi, pass/fail, hoàn tất bài học/khóa học, notification delivery và upload media theo `guides/devops/BUSINESS-METRICS.md`.
+  - GitHub Actions Release Safety Phase 8: SBOM, Cosign signing và rollback workflow theo `guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md`.
 - Deployment Phase 5:
   - Kubernetes baseline dùng Helm chart tại `charts/luyen-thi-lai-xe`.
   - Target hiện tại là GCP/GKE, self-contained dependencies trong cluster cho giai đoạn MVP.
@@ -268,6 +269,7 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
 - DORA Grafana dashboard Phase 5 ở [guides/devops/DORA-GRAFANA-DASHBOARD.md](./guides/devops/DORA-GRAFANA-DASHBOARD.md)
 - OpenTelemetry/Jaeger tracing Phase 6 ở [guides/devops/OPENTELEMETRY-JAEGER-TRACING.md](./guides/devops/OPENTELEMETRY-JAEGER-TRACING.md)
 - Business metrics Phase 7 ở [guides/devops/BUSINESS-METRICS.md](./guides/devops/BUSINESS-METRICS.md)
+- GitHub Actions release safety Phase 8 ở [guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md](./guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md)
 
 ## 11. Quy trình làm việc
 
