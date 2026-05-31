@@ -75,6 +75,9 @@ jobs:
       - name: Generate DORA metrics report
         run: npm run dora:report
 
+      - name: Export DORA Prometheus metrics
+        run: npm run dora:export-prometheus
+
       - name: Upload DORA report artifact
         uses: actions/upload-artifact@v4
         with:

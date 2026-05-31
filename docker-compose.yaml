@@ -679,6 +679,17 @@ services:
     depends_on:
       - elasticsearch
 
+  dora-metrics-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --collector.disable-defaults
+      - --collector.textfile
+      - --collector.textfile.directory=/textfile
+      - --web.listen-address=:9100
+    volumes:
+      - ./reports/dora:/textfile:ro
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v2.55.1
     volumes:
@@ -704,6 +715,7 @@ services:
       - media-service
       - audit-service
       - alertmanager
+      - dora-metrics-exporter
 
   alertmanager:
     image: prom/alertmanager:v0.27.0

@@ -459,6 +459,17 @@ services:
       elasticsearch:
         condition: service_healthy
 
+  dora-metrics-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --collector.disable-defaults
+      - --collector.textfile
+      - --collector.textfile.directory=/textfile
+      - --web.listen-address=:9100
+    volumes:
+      - ./reports/dora:/textfile:ro
+    restart: unless-stopped
+
   # ── Observability (Metrics) ───────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -477,6 +488,7 @@ services:
       - --web.console.templates=/usr/share/prometheus/consoles
     depends_on:
       - alertmanager
+      - dora-metrics-exporter
     restart: unless-stopped
 
   alertmanager:

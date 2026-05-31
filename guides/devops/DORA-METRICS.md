@@ -142,8 +142,32 @@ Trong artifact có:
 
 - `dora-report.md`
 - `dora-report.json`
+- `dora.prom`
 
-## 5. Cách đọc báo cáo
+## 5. Grafana dashboard cho DORA
+
+Phase 5 đã đưa DORA report lên Prometheus/Grafana:
+
+```bash
+npm run dora:report
+npm run dora:export-prometheus
+```
+
+File Prometheus textfile được tạo tại:
+
+```text
+reports/dora/dora.prom
+```
+
+Prometheus scrape metrics qua job `dora`, rồi Grafana hiển thị dashboard provision sẵn:
+
+```text
+Microservices / DORA Metrics
+```
+
+Tài liệu chi tiết nằm ở `guides/devops/DORA-GRAFANA-DASHBOARD.md`.
+
+## 6. Cách đọc báo cáo
 
 ### Deployment Frequency
 
@@ -214,7 +238,7 @@ Khi production hóa sâu hơn, nên tách rõ:
 - deploy thành công nhưng gây lỗi runtime
 - deploy phải rollback
 
-## 6. Quy trình vận hành khi có sự cố
+## 7. Quy trình vận hành khi có sự cố
 
 1. Alert hoặc smoke test phát hiện lỗi.
 2. Tạo GitHub issue bằng template `Incident report`.
@@ -225,7 +249,7 @@ Khi production hóa sâu hơn, nên tách rõ:
 7. Với incident `sev1` hoặc `sev2`, tạo thêm issue `Postmortem`.
 8. Chạy lại `npm run dora:report` hoặc workflow `DORA Metrics Report`.
 
-## 7. Kịch bản demo với giảng viên
+## 8. Kịch bản demo với giảng viên
 
 Lời thoại gợi ý:
 
@@ -250,11 +274,10 @@ Nếu chạy trên GitHub:
 3. Tải artifact `dora-report-<run_number>`.
 4. Chỉ vào bảng tổng quan 4 chỉ số DORA.
 
-## 8. Việc nên làm tiếp
+## 9. Việc nên làm tiếp
 
-- Đẩy DORA report vào Grafana dashboard thay vì chỉ dùng artifact Markdown.
 - Ghi deployment event vào database hoặc object storage để không phụ thuộc hoàn toàn vào GitHub Actions history.
-- Kết nối Jenkins build history nếu Jenkins là pipeline chính.
+- Kết nối sâu Jenkins build history nếu Jenkins là pipeline chính lâu dài.
 - Thêm OpenTelemetry hoặc Jaeger để tracing end-to-end.
 - Bổ sung business metrics như số lượt làm bài thi, tỷ lệ pass/fail, notification delivery success.
 - Tự động kiểm tra postmortem còn mở quá deadline và nhắc owner xử lý.

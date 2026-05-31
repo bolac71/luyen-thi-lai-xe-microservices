@@ -102,11 +102,13 @@ Luồng production/staging hiện chốt **10 application services**:
   - `.github/workflows/incident-labeler.yml`: tự gắn label môi trường, severity và change-failure/rollback cho incident issues.
   - `scripts/devops-record-deployment.js`: ghi deployment event JSON sau mỗi lần deploy.
   - `scripts/devops-dora-report.ts`: tổng hợp Deployment Frequency, Lead Time for Changes, MTTR và Change Failure Rate từ GitHub Actions và incident issues.
+  - `scripts/devops-dora-prometheus-export.ts`: export DORA JSON sang Prometheus textfile metrics để Grafana hiển thị.
   - `Jenkinsfile`: ghi Jenkins deployment event sau `Deploy Staging` và `Deploy Production`, rồi archive artifact cho DORA.
   - `.github/ISSUE_TEMPLATE/incident_report.yml` và `.github/ISSUE_TEMPLATE/postmortem.yml`: chuẩn hóa dữ liệu incident/postmortem để tính MTTR/CFR.
   - `guides/devops/INCIDENT-POSTMORTEM-PROCESS.md`: quy trình Phase 2 cho incident severity, label chuẩn và postmortem bắt buộc với SEV1/SEV2.
   - `guides/devops/DEPLOYMENT-EVENT-STORE.md`: quy trình Phase 3 để lưu deployment events và giảm phụ thuộc vào GitHub Actions history.
   - `guides/devops/JENKINS-DORA-INTEGRATION.md`: quy trình Phase 4 để gom Jenkins deploy vào cùng DORA event schema.
+  - `guides/devops/DORA-GRAFANA-DASHBOARD.md`: quy trình Phase 5 để đưa DORA metrics lên Prometheus/Grafana.
 - DevSecOps baseline:
   - Trivy image scan với `severity: CRITICAL,HIGH`, `exit-code: 1`.
   - PR thay đổi DevOps/shared files sẽ build/scan đủ 10 production services.
@@ -147,6 +149,9 @@ Luồng production/staging hiện chốt **10 application services**:
 - Prometheus scrape config:
   - `docker/prometheus/prometheus.yml`
   - `docker/prometheus/prometheus.local.yml`
+- DORA dashboard:
+  - `docker/grafana/dashboards/dora-metrics.json`
+  - `dora-metrics-exporter` đọc `reports/dora/dora.prom` qua textfile collector.
 - Alert rules:
   - service metrics endpoint down.
   - high 5xx rate.

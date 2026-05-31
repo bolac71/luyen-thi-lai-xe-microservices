@@ -373,14 +373,18 @@ Mở file:
 
 - `docker/prometheus/prometheus.yml`
 - `docker/prometheus/alerts.yml`
-- `docker/grafana/provisioning/dashboards/microservices-observability.json`
+- `docker/grafana/dashboards/microservices-observability.json`
+- `docker/grafana/dashboards/dora-metrics.json`
 - `guides/devops/OBSERVABILITY-ELK.md`
 - `guides/devops/OBSERVABILITY-RUNBOOK.md`
+- `guides/devops/DORA-GRAFANA-DASHBOARD.md`
 
 Lệnh demo:
 
 ```bash
 npm run observability:smoke
+npm run dora:report
+npm run dora:export-prometheus
 ```
 
 Nếu đang chạy local:
@@ -395,10 +399,15 @@ Lời thoại gợi ý:
 
 > Mỗi service expose health endpoints và metrics. Prometheus scrape `/metrics`, Grafana có dashboard, alert rules theo dõi service down, 5xx rate, p95 latency, memory/CPU và RabbitMQ DLQ/retry backlog. Logs được chuẩn hóa qua Winston, correlation id và optional Logstash transport.
 
+Với phần DORA, mở Grafana dashboard `DORA Metrics` và nói:
+
+> Dự án không chỉ quan sát runtime mà còn đo hiệu quả DevOps. Deployment event từ GitHub Actions/Jenkins được tổng hợp thành DORA report, export sang Prometheus metrics và hiển thị trên Grafana gồm Deployment Frequency, Lead Time for Changes, Change Failure Rate và MTTR.
+
 Điểm nhấn:
 
 - Health check dùng cho Kubernetes probes.
 - Metrics dùng cho Prometheus/Grafana.
+- DORA dashboard dùng để theo dõi tốc độ và độ ổn định của delivery.
 - Logs có correlation id để trace request qua nhiều service.
 - Có runbook để xử lý incident.
 
