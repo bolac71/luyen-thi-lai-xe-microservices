@@ -7,7 +7,7 @@ metadata:
 data:
   NODE_ENV: {{ .Values.global.nodeEnv | quote }}
   CONSUL_URL: {{ printf "http://%s-consul:8500" (include "lttl.fullname" .) | quote }}
-  KEYCLOAK_AUTH_SERVER_URL: {{ printf "http://%s-keycloak:8080" (include "lttl.fullname" .) | quote }}
+  KEYCLOAK_AUTH_SERVER_URL: {{ .Values.config.keycloakPublicUrl | quote }}
   KEYCLOAK_REALM: {{ .Values.secrets.keycloakRealm | quote }}
   KEYCLOAK_CLIENT_ID: {{ .Values.secrets.keycloakClientId | quote }}
   KEYCLOAK_TIMEOUT_MS: "10000"
