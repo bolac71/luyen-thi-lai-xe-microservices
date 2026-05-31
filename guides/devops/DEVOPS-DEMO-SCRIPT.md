@@ -478,7 +478,7 @@ Mở file:
 - `docker/keycloak/keycloak-daily-export.sh`
 - `guides/devops/BACKUP-STRATEGY.md`
 
-Lệnh demo:
+### Demo local
 
 ```bash
 npm run db:backup:once
@@ -486,14 +486,76 @@ npm run db:restore:test
 npm run keycloak:backup:once
 ```
 
-Lời thoại gợi ý:
+Sau khi chạy, mở nhanh thư mục:
+
+```text
+backups/postgres/development-local/<timestamp>/
+backups/keycloak/development-local/<timestamp>/
+```
+
+Chỉ các artifact chính:
+
+- File `.dump` của PostgreSQL.
+- File `.sha256` để kiểm tra checksum.
+- `manifest.csv` để biết backup nào thuộc service/database nào.
+- Keycloak export gồm `realm.json`, `users.json`, `clients.json`, `roles.json`.
+
+Lời thoại local:
+
+> Ở local, nhóm có backup PostgreSQL bằng `pg_dump --format=custom`, tạo checksum và manifest cho từng database. Keycloak được backup cả ở mức database và export realm config. Sau đó nhóm chạy `db:restore:test` để restore thật vào một PostgreSQL container tạm, chứng minh backup không chỉ được tạo ra mà còn dùng được.
+
+### Demo GCP/K3s
+
+Nếu môi trường GCP đang truy cập được bằng kubeconfig/IAP tunnel, demo một database mẫu, ví dụ `user_db`:
+
+```bash
+NAMESPACE=staging
+POSTGRES_POD=$(kubectl get pod -n "$NAMESPACE" -l app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}')
+TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+BACKUP_DIR="backups/gcp/postgres/$TIMESTAMP"
+mkdir -p "$BACKUP_DIR"
+
+kubectl exec -n "$NAMESPACE" "$POSTGRES_POD" -- \
+  sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump --format=custom --no-owner --no-privileges --username "$POSTGRES_USER" --dbname user_db' \
+  > "$BACKUP_DIR/user-service_staging_$TIMESTAMP.dump"
+
+sha256sum "$BACKUP_DIR/user-service_staging_$TIMESTAMP.dump" \
+  > "$BACKUP_DIR/user-service_staging_$TIMESTAMP.dump.sha256"
+```
+
+Nếu đã tạo Google Cloud Storage bucket backup, upload bản backup ra khỏi VM:
+
+```bash
+gcloud storage cp --recursive "$BACKUP_DIR" \
+  "gs://<project-id>-luyen-thi-lai-xe-backups/postgres/staging/$TIMESTAMP/"
+
+gcloud storage ls \
+  "gs://<project-id>-luyen-thi-lai-xe-backups/postgres/staging/$TIMESTAMP/"
+```
+
+Restore rehearsal từ file vừa backup:
+
+```bash
+RESTORE_TEST_BACKUP_FILE="$BACKUP_DIR/user-service_staging_$TIMESTAMP.dump" npm run db:restore:test
+```
+
+Lời thoại GCP:
+
+> Trên GCP hiện tại, dự án chạy PostgreSQL trong K3s bằng PVC local-path, chưa dùng Cloud SQL. Vì vậy nhóm dùng logical backup: exec vào pod PostgreSQL, chạy `pg_dump`, tạo checksum rồi upload ra Google Cloud Storage để có bản offsite không phụ thuộc vào VM. Sau đó vẫn dùng restore rehearsal để kiểm chứng file `.dump`.
+
+Nếu không muốn chạy trực tiếp trên GCP trong buổi demo, mở `guides/devops/BACKUP-STRATEGY.md`, mục `Backup trên GCP/K3s`, và nói:
+
+> Phần GCP đã được document thành runbook. Trong demo nhanh, nhóm có thể chạy local restore test để chứng minh quy trình, còn trên GCP cùng một chiến lược được áp dụng qua `kubectl exec` và Google Cloud Storage.
+
+Lời thoại tổng kết:
 
 > Dự án có backup PostgreSQL định kỳ, export Keycloak realm định kỳ, retention daily/weekly và restore rehearsal. Quan trọng nhất không chỉ là có file backup, mà phải có restore test để chứng minh backup dùng được.
 
 Điểm cần nói thật:
 
-- Hiện backup offsite/PITR chưa hoàn chỉnh.
-- Roadmap GCP là đẩy backup lên Cloud Storage và cân nhắc Cloud SQL PITR.
+- Docker Compose đã có service backup định kỳ; Helm/K3s hiện mới có runbook thao tác GCP, chưa có CronJob tự động trong chart.
+- GCP offsite backup dùng Cloud Storage ở mức runbook/demo; production nên tự động hóa bằng Kubernetes CronJob và Workload Identity.
+- Nếu chuyển database sang Cloud SQL, nên bật automated backup và point-in-time recovery.
 
 ## 15. Demo 10 - Rollback Và Release Safety
 
