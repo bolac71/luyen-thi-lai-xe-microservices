@@ -353,12 +353,44 @@ jobs:
       KEYCLOAK_CLIENT_SECRET: ${{ secrets.STAGING_KEYCLOAK_CLIENT_SECRET }}
       STORAGE_ACCOUNT_NAME: ${{ secrets.STAGING_STORAGE_ACCOUNT_NAME }}
       STORAGE_ACCOUNT_KEY: ${{ secrets.STAGING_STORAGE_ACCOUNT_KEY }}
+      GCP_VM_NAME: luyen-thi-lai-xe-staging-k3s
+      GCP_VM_ZONE: asia-southeast1-b
+      GCP_PROJECT_ID: devops-497910
     steps:
       - uses: actions/checkout@v4
 
       - uses: azure/setup-helm@v4
 
       - uses: azure/setup-kubectl@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Start IAP tunnel to K3s API
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud compute start-iap-tunnel "$GCP_VM_NAME" 6443 \
+            --local-host-port=127.0.0.1:16443 \
+            --zone="$GCP_VM_ZONE" \
+            --project="$GCP_PROJECT_ID" &
+          TUNNEL_PID=$!
+          echo "TUNNEL_PID=$TUNNEL_PID" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            if nc -z 127.0.0.1 16443 2>/dev/null; then
+              echo "✅ IAP tunnel ready (attempt $i)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "❌ IAP tunnel failed to start within 60s"
+          kill "$TUNNEL_PID" 2>/dev/null || true
+          exit 1
 
       - name: Validate Kubernetes deployment inputs
         shell: bash
@@ -477,3 +509,12 @@ jobs:
           kubectl get jobs -n staging
           API_SCHEME="${API_SCHEME:-http}"
           SMOKE_BASE_URL="${API_SCHEME}://${API_HOST}" bash scripts/k8s-smoke.sh
+
+      - name: Cleanup IAP tunnel
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${TUNNEL_PID:-}" ]]; then
+            kill "$TUNNEL_PID" 2>/dev/null || true
+            echo "IAP tunnel (PID $TUNNEL_PID) terminated"
+          fi
