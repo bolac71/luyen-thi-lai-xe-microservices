@@ -135,20 +135,52 @@ File values quan trọng:
 * `charts/luyen-thi-lai-xe/values-gcp.example.yaml`: template GCP/K3s có HTTPS.
 * `charts/luyen-thi-lai-xe/values-gcp.local.yaml`: file local thật, không commit.
 
-Deploy thủ công lên cluster:
+Deploy thủ công lên cluster thông qua IAP Tunnel (Linh hoạt & Bảo mật):
 
-```powershell
-$env:KUBECONFIG = (Resolve-Path .\kubeconfig-gcp.yaml)
+Do máy local của bạn có IP công cộng thay đổi liên tục và bị tường lửa GCP chặn, chúng ta sẽ quản trị cụm K8s một cách an toàn thông qua đường truyền **GCP Identity-Aware Proxy (IAP) Tunnel** mà không cần mở cổng tường lửa công cộng.
 
-helm upgrade --install luyen-thi-lai-xe charts/luyen-thi-lai-xe `
-  --namespace staging `
-  --create-namespace `
-  --wait `
-  --wait-for-jobs `
-  --timeout 25m `
-  -f charts/luyen-thi-lai-xe/values-gcp.local.yaml
+1. **Khởi động IAP Tunnel trong nền (Background):**
+   Mở một cửa sổ PowerShell mới và chạy lệnh sau để chuyển tiếp cổng API K8s (`6443`) về cổng local `16443`:
+   ```powershell
+   gcloud compute start-iap-tunnel luyen-thi-lai-xe-staging-k3s 6443 --local-host-port=127.0.0.1:16443 --zone=asia-southeast1-b --project=devops-497910
+   ```
+   *Giữ cửa sổ này mở trong suốt quá trình chạy lệnh kubectl/helm.*
 
-```
+2. **Cấu hình cert-manager (Bắt buộc chạy 1 lần đối với cụm mới sạch):**
+   ```powershell
+   # Thêm và update repo
+   helm repo add jetstack https://charts.jetstack.io
+   helm repo update
+
+   # Cài đặt cert-manager
+   helm upgrade --install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.14.4 --set installCRDs=true --kubeconfig kubeconfig-gcp.yaml --kube-insecure-skip-tls-verify
+   ```
+
+3. **Tạo ClusterIssuer phát hành chứng chỉ Let's Encrypt SSL/TLS:**
+   Tạo file `letsencrypt-issuer.yaml` với nội dung ClusterIssuer trỏ tới `ingressClassName: traefik` và apply:
+   ```powershell
+   kubectl --kubeconfig kubeconfig-gcp.yaml --insecure-skip-tls-verify=true apply -f letsencrypt-issuer.yaml
+   ```
+
+4. **Triển khai ứng dụng (Redeploy động) bằng Helm:**
+   Để tránh việc hardcode địa chỉ IP khi IP của VM có thay đổi, chúng ta sẽ tự động lấy IP từ GCP API và ghi đè (override) động vào tham số của Helm tại thời điểm chạy:
+   ```powershell
+   # 1. Trỏ biến Kubeconfig về IAP Tunnel local
+   $env:KUBECONFIG = (Resolve-Path .\kubeconfig-gcp.yaml)
+
+   # 2. Lấy IP VM động và thực thi cài đặt Helm
+   $VM_IP = (gcloud compute addresses list --filter="name=luyen-thi-lai-xe-staging-ip" --format="value(address)").Trim()
+   helm upgrade --install luyen-thi-lai-xe charts/luyen-thi-lai-xe `
+     --namespace staging --create-namespace --wait --wait-for-jobs --timeout 25m `
+     -f charts/luyen-thi-lai-xe/values-gcp.local.yaml --kube-insecure-skip-tls-verify `
+     --set ingress.apiHost="api.$VM_IP.nip.io" `
+     --set ingress.authHost="auth.$VM_IP.nip.io" `
+     --set config.frontendOrigin="https://api.$VM_IP.nip.io" `
+     --set config.gatewayPublicUrl="https://api.$VM_IP.nip.io" `
+     --set config.keycloakPublicUrl="https://auth.$VM_IP.nip.io" `
+     --set config.corsOrigins[0]="https://api.$VM_IP.nip.io" `
+     --set config.corsOrigins[1]="https://auth.$VM_IP.nip.io"
+   ```
 
 Kiểm tra sau deploy:
 
@@ -160,7 +192,6 @@ kubectl get ingress -n staging
 kubectl get certificate -n staging
 kubectl get hpa -n staging
 kubectl top pods -n staging
-
 ```
 
 Smoke test:
@@ -228,7 +259,15 @@ Lấy thông tin output (Chạy trong thư mục terraform):
 terraform output public_ip
 terraform output api_host
 terraform output auth_host
+# LƯU Ý: Lệnh này mặc định gọi SSH trực tiếp, có thể bị firewall chặn nếu IP local đổi:
 terraform output kubeconfig_fetch_command_powershell
+```
+
+**Cách đồng bộ Kubeconfig linh hoạt tuyệt đối qua IAP Tunnel (Khuyên dùng khi IP thay đổi):**
+Nếu lệnh fetch trực tiếp của Terraform bị timeout do tường lửa chặn IP local của bạn, hãy chạy lệnh PowerShell này từ thư mục gốc của project (sử dụng IAP tunnel chạy ngầm để lấy file, tự động nhận diện IP của VM):
+```powershell
+$VM_IP = (gcloud compute addresses list --filter="name=luyen-thi-lai-xe-staging-ip" --format="value(address)").Trim()
+gcloud compute ssh luyen-thi-lai-xe-staging-k3s --zone=asia-southeast1-b --project=devops-497910 --command="sudo sed 's/127.0.0.1/$VM_IP/g' /etc/rancher/k3s/k3s.yaml" --tunnel-through-iap --ssh-flag="-batch" | Out-File -Encoding ascii kubeconfig-gcp.yaml
 ```
 
 Load test bằng Docker k6:
