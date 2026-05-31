@@ -156,5 +156,5 @@ reports/dora/dora-report.md
 
 - Ghi deployment event vào Cloud Storage hoặc database thay vì chỉ upload GitHub artifact.
 - Thêm Jenkins API integration để tự tải event artifacts từ Jenkins build history.
-- Thêm workflow rollback có tham số và ghi `rollbackOf`.
+- Workflow `Rollback Release` đã ghi `rollbackOf`; việc tiếp theo là chạy thử rollback trên staging thật và lưu artifact làm bằng chứng.
 - Đẩy deployment event thành Prometheus metrics hoặc Grafana datasource.

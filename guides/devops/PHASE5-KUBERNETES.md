@@ -201,6 +201,8 @@ SMOKE_BASE_URL=https://api.example.com bash scripts/k8s-smoke.sh
 
 Rollback sẽ đưa Kubernetes release về revision cũ, bao gồm app image tags và rendered config. Database migrations không tự reverse; nếu migration không backward compatible thì cần tạo migration tiếp theo thay vì kỳ vọng rollback DB tự xử lý.
 
+Từ Phase 8, rollback có thể chạy bằng GitHub Actions workflow `Rollback Release`. Workflow này nhận `target_environment`, `helm_revision`, `confirm_rollback`, tùy chọn chạy smoke test sau rollback và ghi deployment event để DORA report tính được rollback/change failure.
+
 ## K3s Legacy Lab
 
 Chỉ dùng phần này khi cần rehearsal giá rẻ trên local/VM ngoài GCP:

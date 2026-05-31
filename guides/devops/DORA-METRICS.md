@@ -26,6 +26,7 @@ Script ưu tiên đọc deployment event JSON được sinh sau mỗi lần depl
 
 - `Main Image Release`
 - `Production Release`
+- `Rollback Release`
 - `Legacy SSH Compose Deploy`
 
 Các workflow này cho biết:

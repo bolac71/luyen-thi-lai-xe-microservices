@@ -515,7 +515,7 @@ Lời thoại gợi ý:
 
 Lời thoại gợi ý:
 
-> Tổng kết lại, phần DevOps của dự án hiện đã đủ tốt cho MVP/demo trên local hoặc GCP. Nhóm đã có containerization, CI/CD, DevSecOps scan, GHCR registry, Helm/GKE deployment baseline, health checks, smoke tests, observability, resilience và backup/restore. Những phần còn thiếu như Terraform, HPA, load test, SBOM/signing, Google Secret Manager và managed database đã được ghi rõ trong roadmap, chứ không bị bỏ qua.
+> Tổng kết lại, phần DevOps của dự án hiện đã đủ tốt cho MVP/demo trên local hoặc GCP. Nhóm đã có containerization, CI/CD, DevSecOps scan, SBOM/signing baseline, GHCR registry, Helm/GKE deployment baseline, rollback workflow, health checks, smoke tests, observability, resilience và backup/restore. Những phần còn thiếu như Terraform, HPA, load test, admission policy verify image signature, Google Secret Manager và managed database đã được ghi rõ trong roadmap, chứ không bị bỏ qua.
 
 Nên nhấn mạnh:
 
