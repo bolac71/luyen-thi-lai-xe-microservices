@@ -74,6 +74,9 @@ model Question {
   @@index([isActive, isDeleted])
   @@index([createdAt])
   @@index([licenseCategories], type: Gin)
+  // ASR-PERF-11: pg_trgm GIN index enables fast ILIKE keyword search on content
+  // Requires CREATE EXTENSION IF NOT EXISTS pg_trgm (added to migration)
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_questions_content_trgm")
   @@map("questions")
 }
 

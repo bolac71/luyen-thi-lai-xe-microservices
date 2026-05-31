@@ -1,6 +1,6 @@
-# DriveMate — Hướng Dẫn Đối Chiếu Kiến Trúc: SRS ➔ ASR ➔ ADD ➔ Design Patterns
+# DriveMate — Hướng Dẫn Đối Chiếu Kiến Trúc: SRS ➔ ASR ➔ ADD ➔ SAD ➔ Design Patterns
 
-Tài liệu này là bản đồ đối chiếu (**Mapping**) chi tiết và đầy đủ giữa **Use Cases (SRS)**, **ASR**, **ADD**, **Design Patterns** và **vị trí source code cụ thể** trong dự án **DriveMate**. Mỗi mục đều link thẳng đến file và đoạn code tương ứng, kèm giải thích cách pattern thỏa mãn yêu cầu kiến trúc.
+Tài liệu này là bản đồ đối chiếu (**Mapping**) chi tiết và đầy đủ giữa **Use Cases (SRS)**, **ASR**, **ADD**, **SAD**, **Design Patterns** và **vị trí source code cụ thể** trong dự án **DriveMate**. Mỗi mục đều link thẳng đến file và đoạn code tương ứng, kèm giải thích cách pattern thỏa mãn yêu cầu kiến trúc. Phần cuối bao gồm **ASR Constraint Compliance Audit** kiểm tra từng constraint trong ASR.xlsx đối chiếu với codebase thực tế.
 
 ---
 
@@ -1400,10 +1400,1166 @@ CourseCachePort (abstract Strategy interface)
 
 ---
 
----
-
 > **Nguồn tham chiếu:**
 > - `context/SRS.docx` — Use Case descriptions
 > - `context/ASR.xlsx` — 48 Architecturally Significant Requirements
 > - `context/ADD.docx` — Architecture Design Document (Design Constraints, 5 Architectural Views, 47 ASR Scenario Tables)
+> - `context/SAD.docx` — Software Architecture Document (Component View, Data Flows, Quality Attribute Tactics, Security Controls)
 > - Source Code: `apps/*/`, `packages/common/src/`
+
+---
+
+
+
+---
+
+## 📋 7. Use Case Detail Matrix — Flow + BR + ASR + ADD + SAD (Bổ Sung Chi Tiết)
+
+Phần này cung cấp ma trận đối chiếu chi tiết cho toàn bộ các Use Cases (UC01–UC36), đặc tả rõ ràng luồng hoạt động (flow), các quy tắc nghiệp vụ (BR) tương ứng, mối liên kết tới các yêu cầu phi chức năng (ASR), tài liệu thiết kế (ADD), tài liệu kiến trúc (SAD), và vị trí mã nguồn cụ thể trong codebase để phục vụ việc kiểm tra và đối chiếu nhanh.
+
+---
+
+### 🔐 Nhóm 1: Quản Lý Người Dùng & Bảo Mật
+
+#### UC01: Login (Đăng nhập)
+*   **Dịch vụ:** `identity-service`
+*   **Tác nhân (Actor):** All Users
+*   **Kích hoạt (Trigger):** Người dùng nhập thông tin đăng nhập và nhấn nút "Login".
+*   **Luồng Hoạt Động (Flow):**
+    1. Người dùng nhập thông tin `email` và `password`.
+    2. Hệ thống kiểm tra tính hợp lệ của `email` và `password` (không rỗng, đúng định dạng email). Nếu vi phạm, hiển thị lỗi `MSG01` (BR001).
+    3. Hệ thống truy vấn tài khoản theo `email` và kiểm tra cờ `isLocked`. Nếu tài khoản đã bị khóa, hiển thị lỗi `MSG02` (BR002).
+    4. Hệ thống mã hóa mật khẩu nhập vào và đối chiếu với hash mật khẩu trong cơ sở dữ liệu. Nếu không khớp, cập nhật bộ đếm số lần đăng nhập sai (BR003). Nếu số lần sai vượt quá 5 lần liên tiếp trong 5 phút, thực hiện khóa tài khoản (`isLocked=true`) và hiển thị lỗi `MSG02` (BR004).
+    5. Nếu đăng nhập thành công, Keycloak cấp mã JWT Access Token và Refresh Token chứa các phân quyền (role claims) của người dùng. Hệ thống chuyển hướng người dùng về trang chủ (BR005).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR001`: Kiểm tra email và password rỗng hoặc sai định dạng (MSG01).
+    *   `BR002`: Kiểm tra trạng thái tài khoản bị khóa (isLocked=true) (MSG02).
+    *   `BR003`: Xác thực hash mật khẩu và cập nhật bộ đếm lần sai (MSG03).
+    *   `BR004`: Khóa tài khoản sau 5 lần đăng nhập sai liên tiếp trong 5 phút (MSG02).
+    *   `BR005`: Cấp JWT token và refresh token chứa role claims để phục vụ RBAC ở gateway.
+*   **Liên kết ASR:** ASR-SEC-01 (Stateless Auth), ASR-PERF-01 (P95 Latency <= 300ms)
+*   **Liên kết ADD:** Section 3.2 (Identity & Access Control), Table 1, Table 7, Flow 1
+*   **Liên kết SAD:** §5.2.1 (Login Flow), §6.3.1 (Authentication), Logical View
+*   **Tham chiếu Codebase:**
+    *   Controller: [auth.controller.ts](../../apps/identity-service/src/presentation/http/auth.controller.ts)
+    *   UseCase: [login.use-case.ts](../../apps/identity-service/src/application/use-cases/login/login.use-case.ts)
+    *   Keycloak Service: [keycloak.service.ts](../../apps/identity-service/src/infrastructure/services/keycloak.service.ts)
+
+#### UC02: Forgot Password (Quên mật khẩu)
+*   **Dịch vụ:** `identity-service`
+*   **Tác nhân (Actor):** All Users
+*   **Kích hoạt (Trigger):** Người dùng submit yêu cầu quên mật khẩu từ màn hình đăng nhập.
+*   **Luồng Hoạt Động (Flow):**
+    1. Người dùng nhập `email` đã đăng ký.
+    2. Hệ thống kiểm tra định dạng `email`. Nếu email rỗng hoặc sai định dạng, trả về lỗi `MSG04` (BR006).
+    3. Hệ thống tìm kiếm tài khoản theo `email`. Nếu tài khoản không tồn tại hoặc bị khóa/disable, hệ thống ghi log cảnh báo nhưng vẫn trả về thông điệp thành công chung chung để bảo mật (MSG05 / BR007).
+    4. Keycloak sinh một link reset mật khẩu chứa một token UUID dùng một lần với thời gian sống (TTL) là 15 phút, sau đó gửi qua email cho người dùng (BR008).
+    5. Khi người dùng click link, Keycloak xác thực trạng thái token (tồn tại, chưa dùng, chưa hết hạn) và kiểm tra chính sách mật khẩu phức tạp đối với mật khẩu mới. Nếu thất bại, trả về lỗi `MSG06` hoặc `MSG07` (BR009).
+    6. Nếu hợp lệ, hệ thống cập nhật mật khẩu đã hash một chiều, đánh dấu token đã sử dụng, và trả về thông báo thành công (BR010).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR006`: Validate email format (MSG04).
+    *   `BR007`: Kiểm tra email tồn tại trong DB, tránh leak thông tin tài khoản (MSG05).
+    *   `BR008`: Sinh reset link UUID dùng một lần, giới hạn TTL = 15 phút qua Keycloak.
+    *   `BR009`: Xác thực token reset và độ phức tạp mật khẩu mới (MSG06/MSG07).
+    *   `BR010`: Cập nhật hash mật khẩu mới thành công và vô hiệu hóa token.
+*   **Liên kết ASR:** ASR-SEC-02 (Reset link TTL limit to 15m)
+*   **Liên kết ADD:** Table 2 (Password Reset Flow)
+*   **Liên kết SAD:** §6.3.1 (Password Reset via Keycloak)
+*   **Tham chiếu Codebase:**
+    *   Controller: [auth.controller.ts](../../apps/identity-service/src/presentation/http/auth.controller.ts)
+    *   UseCase: [forgot-password.use-case.ts](../../apps/identity-service/src/application/use-cases/forgot-password/forgot-password.use-case.ts)
+    *   Keycloak Admin Service (Thiết lập TTL 15 phút): [keycloak-admin.service.ts](../../apps/identity-service/src/infrastructure/keycloak-admin/keycloak-admin.service.ts#L311-L335)
+
+#### UC03: Create Student Account (Tạo tài khoản học viên)
+*   **Dịch vụ:** `identity-service` + `user-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit form tạo tài khoản học viên mới trên trang quản trị.
+*   **Luồng Hoạt Động (Flow):**
+    1. Hệ thống kiểm tra quyền tạo tài khoản của Actor. Nếu không được phép, trả về lỗi `MSG09` (BR011).
+    2. Xác thực các thông tin bắt buộc gồm: `fullName`, `email`, `role`, `temporaryPassword`. Nếu không hợp lệ, trả về lỗi `MSG08` (BR012).
+    3. Hệ thống kiểm tra xem email đã tồn tại trong DB chưa. Nếu bị trùng lặp, trả về lỗi `MSG10` (BR013).
+    4. Hệ thống tiến hành mã hóa mật khẩu tạm thời, tạo tài khoản trong Keycloak và ghi nhận bản ghi người dùng với trạng thái hoạt động (Active) vào database local (BR014).
+    5. Ghi nhận sự kiện tạo tài khoản qua Transactional Outbox. `user-service` lắng nghe event và tự động khởi tạo bản ghi `UserProfile` tương ứng để đồng bộ dữ liệu.
+    6. Hệ thống gửi email chứa thông tin tài khoản và mật khẩu tạm thời cho học viên (BR015).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR011`: Phân quyền RBAC cho phép Admin/CM tạo học viên (MSG09).
+    *   `BR012`: Validate các trường dữ liệu bắt buộc (MSG08).
+    *   `BR013`: Email duy nhất trên toàn hệ thống (MSG10).
+    *   `BR014`: Tạo tài khoản Keycloak và ghi DB local đồng thời.
+    *   `BR015`: Event Outbox sync sang user-service, gửi thông tin mật khẩu tạm thời cho học viên (MSG11).
+*   **Liên kết ASR:** ASR-SEC-04 (Centralized RBAC), ASR-PERF-02 (GIN trgm index)
+*   **Liên kết ADD:** Table 4 (Create User Account), Section 3.4 (Outbox Sync)
+*   **Liên kết SAD:** §6.3.2 (Authorization / RBAC)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin.controller.ts](../../apps/identity-service/src/presentation/http/admin.controller.ts)
+    *   UseCase: [create-identity-user.use-case.ts](../../apps/identity-service/src/application/use-cases/create-identity-user/create-identity-user.use-case.ts)
+    *   Consumer: [messaging.controller.ts](../../apps/user-service/src/presentation/messaging/messaging.controller.ts)
+    *   Sync UseCase: [create-user-profile.use-case.ts](../../apps/user-service/src/application/use-cases/create-user-profile/create-user-profile.use-case.ts)
+
+#### UC04: Update Student Account (Cập nhật tài khoản học viên)
+*   **Dịch vụ:** `identity-service` + `user-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit form cập nhật thông tin tài khoản học viên.
+*   **Luồng Hoạt Động (Flow):**
+    1. Hệ thống kiểm tra quyền cập nhật của Actor. Nếu không được phép, trả về lỗi `MSG14` (BR016).
+    2. Xác minh người dùng cần cập nhật tồn tại trong DB. Nếu không thấy, trả về lỗi `MSG12` (BR017).
+    3. Validate các trường dữ liệu cập nhật (`fullName`, `email`, `role`, metadata...). Nếu không hợp lệ, trả về lỗi `MSG13` (BR018).
+    4. Hệ thống cập nhật thông tin trong DB local, tăng số version của bản ghi (BR019).
+    5. Hệ thống cập nhật thông tin trên Keycloak nếu có thay đổi vai trò (role) hoặc email.
+    6. Ghi nhận sự kiện cập nhật qua outbox để đồng bộ thông tin sang `user-service`. Trả về kết quả cập nhật và ghi audit log (BR020).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR016`: Kiểm tra quyền sửa đổi tài khoản của Actor (MSG14).
+    *   `BR017`: Kiểm tra sự tồn tại của người dùng (MSG12).
+    *   `BR018`: Validate thông tin cập nhật (MSG13).
+    *   `BR019`: Cập nhật DB local & đồng bộ Keycloak.
+    *   `BR020`: Version increment, outbox sync event, trả về payload (MSG15).
+*   **Liên kết ASR:** ASR-SEC-04 (RBAC)
+*   **Liên kết ADD:** Table 4 (Update User Account)
+*   **Liên kết SAD:** §6.3.2 (Authorization / RBAC)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-user.controller.ts](../../apps/user-service/src/presentation/http/admin-user.controller.ts)
+    *   UseCase: [update-user-profile.use-case.ts](../../apps/user-service/src/application/use-cases/update-user-profile/update-user-profile.use-case.ts)
+    *   Aggregate: [user-profile.aggregate.ts](../../apps/user-service/src/domain/aggregates/user-profile/user-profile.aggregate.ts)
+
+#### UC05: Lock Student Account (Khóa/Mở khóa tài khoản học viên)
+*   **Dịch vụ:** `identity-service` + `user-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor chọn học viên và bấm nút khóa [btnLockAccount].
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền khóa tài khoản của Actor. Nếu không được phép, trả về lỗi `MSG16` (BR021).
+    2. Xác minh người dùng tồn tại. Nếu không tìm thấy, trả về lỗi `MSG12` (BR022).
+    3. Kiểm tra trạng thái hiện tại của tài khoản. Nếu yêu cầu khóa tài khoản đã bị khóa, hoặc yêu cầu mở khóa tài khoản đang hoạt động, hệ thống ném ra lỗi `IdentityUserAlreadyInStateException` và trả về lỗi `MSG24` (BR023 - Gap 1 đã sửa).
+    4. Cập nhật cờ `enabled = false` (hoặc true khi mở khóa) trên Keycloak để chặn phiên đăng nhập ngay lập tức. Đồng thời ghi nhận cờ `isLocked` và lý do khóa vào DB local của `identity-service` (BR024).
+    5. Phát đi sự kiện qua outbox. `user-service` tiêu thụ sự kiện và đồng bộ cờ `isActive = false` trong DB local để cập nhật danh sách hiển thị (BR025).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR021`: Quyền RBAC khóa/mở khóa (MSG16).
+    *   `BR022`: Check tồn tại học viên (MSG12).
+    *   `BR023`: Trạng thái đích không được trùng trạng thái hiện tại (ném ngoại lệ Bad Request MSG24 nếu đã khóa/mở khóa rồi).
+    *   `BR024`: Tắt/Mở trạng thái kích hoạt trên Keycloak & ghi nhận lý do khóa ở DB.
+    *   `BR025`: Outbox sync sang user-service, trả về kết quả thành công (MSG18).
+*   **Liên kết ASR:** ASR-SEC-01 (Scalable Keycloak Auth), ASR-SEC-04 (Centralized RBAC)
+*   **Liên kết ADD:** Table 1, Table 4, Section 3.2.1
+*   **Liên kết SAD:** §6.3.1 (Authentication), §3.2.1 (identity-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin.controller.ts](../../apps/identity-service/src/presentation/http/admin.controller.ts)
+    *   UseCase: [lock-user.use-case.ts](../../apps/identity-service/src/application/use-cases/lock-user/lock-user.use-case.ts)
+    *   Aggregate: [identity-user.aggregate.ts](../../apps/identity-service/src/domain/aggregates/identity-user/identity-user.aggregate.ts)
+    *   Consumer: [messaging.controller.ts](../../apps/user-service/src/presentation/messaging/messaging.controller.ts)
+
+#### UC06: Assign License Categories (Gán hạng bằng lái cho học viên)
+*   **Dịch vụ:** `user-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit hạng bằng lái mới cho học viên.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền gán hạng của Actor. Nếu không được phép, trả về lỗi `MSG19` (BR026).
+    2. Xác minh học viên tồn tại trong hệ thống. Nếu không, trả về lỗi `MSG12` (BR027).
+    3. Xác thực hạng bằng lái gán mới (`licenseTier`) có thuộc danh mục được phép không. Nếu không hợp lệ, trả về lỗi `MSG20` (BR028).
+    4. Cập nhật hạng bằng lái của học viên, đồng thời ghi nhận một bản ghi Audit Event mô tả thay đổi hạng bằng. Tất cả thao tác được lưu trong một database transaction duy nhất (BR029).
+    5. Gửi event `user.license-tier.assigned` qua outbox để thông báo cho các dịch vụ khác (`course-service`, `exam-service`) cập nhật nội dung học tập và thi của học sinh đó (BR030).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR026`: Kiểm tra quyền RBAC của Admin/CM (MSG19).
+    *   `BR027`: Check tồn tại của Student (MSG12).
+    *   `BR028`: Validate giá trị hạng bằng lái (B1, B2, C...) (MSG20).
+    *   `BR029`: Cập nhật Student Profile + Ghi Audit event trong cùng transaction DB.
+    *   `BR030`: Outbox event trigger sang các service khác (MSG21).
+*   **Liên kết ASR:** ASR-DI-05 (Atomic license tier update & audit event), ASR-MOD-02 (License tiers as config data)
+*   **Liên kết ADD:** Table 28, Table 36
+*   **Liên kết SAD:** §6.3.2 (Authorization / RBAC)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-user.controller.ts](../../apps/user-service/src/presentation/http/admin-user.controller.ts)
+    *   UseCase: [assign-license-tier.use-case.ts](../../apps/user-service/src/application/use-cases/assign-license-tier/assign-license-tier.use-case.ts)
+    *   Aggregate: [user-profile.aggregate.ts](../../apps/user-service/src/domain/aggregates/user-profile/user-profile.aggregate.ts) (phương thức `assignLicenseTier`)
+
+---
+
+### 📚 Nhóm 2: Quản Lý Khóa Học
+
+#### UC07: View Detailed Course List (Xem danh sách/chi tiết khóa học)
+*   **Dịch vụ:** `course-service`
+*   **Tác nhân (Actor):** All Users
+*   **Kích hoạt (Trigger):** Người dùng điều hướng tới trang danh sách khóa học hoặc click xem chi tiết khóa học.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra JWT token của người dùng. Nếu không hợp lệ hoặc hết hạn, hiển thị lỗi `MSG22` (BR031).
+    2. Trích xuất hạng bằng lái (`licenseCategory`) của người dùng từ token để lọc nội dung tương ứng (BR032).
+    3. **Xem Chi Tiết Khóa Học:** Hệ thống tra cứu Redis Cache theo key `course:detail:{courseId}`.
+        *   *Cache Hit:* Trả về thông tin khóa học ngay lập tức (<50ms).
+        *   *Cache Miss:* Truy vấn dữ liệu từ DB local (`course_db`), lưu thông tin vào Redis Cache với TTL = 600 giây (10 phút), sau đó trả dữ liệu cho client. Nếu Redis bị lỗi (down), hệ thống tự động suy giảm chức năng, chuyển hướng query trực tiếp DB mà không làm lỗi request (BR033 - ASR-AV-06).
+    4. **Xem Danh Sách Khóa Học:** Hệ thống thực hiện câu lệnh tìm kiếm phân trang có bộ lọc hạng bằng trên DB. Nếu không khớp khóa học nào, trả về lỗi `MSG24` (BR034).
+    5. Nếu tìm thấy chi tiết khóa học, trả về kết quả (BR035). Nếu không tồn tại, trả về `MSG23`.
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR031`: Xác thực JWT token (MSG22).
+    *   `BR032`: Lọc khóa học theo hạng bằng lái trích xuất từ JWT claims.
+    *   `BR033`: Cơ chế Cache-Aside dùng Redis (TTL = 10 phút) có graceful degradation khi Redis down.
+    *   `BR034`: Phân trang danh sách khóa học (MSG24).
+    *   `BR035`: Trả về dữ liệu chi tiết khóa học (MSG23).
+*   **Liên kết ASR:** ASR-PERF-05 (Redis shared cache), ASR-AV-06 (Partial degradation via safeExec cache fallback)
+*   **Liên kết ADD:** Table 12, Section 3.2.6 (course-service)
+*   **Liên kết SAD:** §5.2.5 (Course Detail Cache Flow), §3.2.6 (course-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [course.controller.ts](../../apps/course-service/src/presentation/http/course.controller.ts)
+    *   UseCases: [list-courses.use-case.ts](../../apps/course-service/src/application/use-cases/list-courses/list-courses.use-case.ts), [get-course-detail.use-case.ts](../../apps/course-service/src/application/use-cases/get-course-detail/get-course-detail.use-case.ts)
+    *   Cache Service: [redis-course-cache.service.ts](../../apps/course-service/src/infrastructure/cache/redis-course-cache.service.ts)
+
+#### UC08: Create Course (Tạo khóa học mới)
+*   **Dịch vụ:** `course-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit form tạo khóa học mới.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra tính hợp lệ của các trường bắt buộc: `courseCode`, `courseName`, `licenseCategory`, `status`. Nếu thiếu hoặc sai định dạng, trả về lỗi `MSG25` (BR036).
+    2. Kiểm tra quyền của Actor. Nếu không có quyền tạo, trả về lỗi `MSG26` (BR037).
+    3. Kiểm tra tính duy nhất của mã khóa học (`courseCode`). Nếu bị trùng lặp, trả về lỗi `MSG27` (BR038).
+    4. Xác thực hạng bằng lái và trạng thái khóa học so với danh mục tham chiếu. Nếu lỗi, trả về `MSG28` (BR039).
+    5. Khởi tạo thực thể khóa học, ghi nhận bản ghi cùng với Audit Event vào database local trong một transaction (BR040).
+    6. Vô hiệu hóa cache danh sách khóa học trên Redis (`course:list:*`) để danh sách cập nhật ngay lập tức (BR041).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR036`: Validate các trường thông tin đầu vào (MSG25).
+    *   `BR037`: RBAC kiểm tra quyền tạo (MSG26).
+    *   `BR038`: Course code duy nhất (MSG27).
+    *   `BR039`: Validate hạng bằng lái và status (MSG28).
+    *   `BR040`: Transaction DB ghi bản ghi khóa học + Audit Event.
+    *   `BR041`: Invalidate Redis list cache, trả về payload (MSG29).
+*   **Liên kết ASR:** ASR-DI-06 (Field validation), ASR-DI-05 (Audit event logging), ASR-PERF-05 (Cache invalidation)
+*   **Liên kết ADD:** Table 29, Table 12
+*   **Liên kết SAD:** §3.2.6 (course-service), §5.2.5 (Course Detail Cache Flow)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-course.controller.ts](../../apps/course-service/src/presentation/http/admin-course.controller.ts)
+    *   UseCase: [create-course.use-case.ts](../../apps/course-service/src/application/use-cases/create-course/create-course.use-case.ts)
+    *   Aggregate: [course.aggregate.ts](../../apps/course-service/src/domain/aggregates/course/course.aggregate.ts)
+
+#### UC09: Update Course (Cập nhật khóa học)
+*   **Dịch vụ:** `course-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit form cập nhật thông tin khóa học.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền sửa của Actor. Nếu không được phép, trả về lỗi `MSG30` (BR042).
+    2. Tra cứu khóa học theo ID với điều kiện `isDeleted = false`. Nếu không tìm thấy, trả về lỗi `MSG23` (BR043).
+    3. Validate độc lập từng trường thông tin cập nhật (tên, trạng thái, roadmap...). Nếu lỗi, trả về `MSG28` (BR044).
+    4. Kiểm tra phiên bản đồng thời (Optimistic Concurrency Control) dựa trên cờ `version` của aggregate. Nếu phiên bản trên client khác trong DB (bị người khác sửa trước), từ chối và trả về lỗi `MSG31` (BR045).
+    5. Ghi nhận các cập nhật vào DB local, tăng số version của khóa học và tạo sự kiện audit log trong một transaction DB (BR046).
+    6. Vô hiệu hóa cache chi tiết khóa học (`course:detail:{courseId}`) và cache danh sách (`course:list:*`) trên Redis (BR047).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR042`: Phân quyền RBAC cập nhật (MSG30).
+    *   `BR043`: Kiểm tra khóa học tồn tại và chưa bị xóa (MSG23).
+    *   `BR044`: Validate độc lập các trường thông tin thay đổi (MSG28).
+    *   `BR045`: Khóa lạc quan (Optimistic Concurrency) dựa trên version để chống xung đột (MSG31).
+    *   `BR046`: Commit transaction cập nhật DB, tăng version, tạo audit log.
+    *   `BR047`: Invalidate Redis cache (detail + lists), trả về kết quả (MSG32).
+*   **Liên kết ASR:** ASR-DI-06 (Independent field updates validation), ASR-PERF-05 (Cache invalidation)
+*   **Liên kết ADD:** Table 29, Table 12
+*   **Liên kết SAD:** §3.2.6 (course-service), §5.2.5
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-course.controller.ts](../../apps/course-service/src/presentation/http/admin-course.controller.ts)
+    *   UseCase: [update-course.use-case.ts](../../apps/course-service/src/application/use-cases/update-course/update-course.use-case.ts)
+    *   Aggregate: [course.aggregate.ts](../../apps/course-service/src/domain/aggregates/course/course.aggregate.ts)
+
+#### UC10: Delete Course (Xóa khóa học)
+*   **Dịch vụ:** `course-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor xác nhận xóa khóa học.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền xóa của Actor. Nếu không được phép, trả về lỗi `MSG33` (BR048).
+    2. Tra cứu khóa học theo ID với điều kiện `isDeleted = false`. Nếu không tìm thấy, trả về lỗi `MSG23` (BR049).
+    3. Kiểm tra xem khóa học có đang được học viên nào đăng ký học hay không (`countEnrollments > 0`). Nếu có ràng buộc phụ thuộc, cấm xóa và trả về lỗi `MSG34` (BR050).
+    4. Thực hiện xóa mềm bằng cách đặt cờ `isDeleted = true`, lưu thông tin người xóa và thời gian xóa (deletedAt, deletedBy) trong transaction DB (BR051).
+    5. Vô hiệu hóa Redis cache của khóa học đó và cache danh sách. Ghi audit event và phản hồi thành công (BR052).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR048`: Quyền RBAC xóa khóa học (MSG33).
+    *   `BR049`: Check tồn tại khóa học chưa bị xóa (MSG23).
+    *   `BR050`: Dependency check: Ngăn xóa nếu khóa học đang có enrollment (MSG34).
+    *   `BR051`: Cơ chế xóa mềm (isDeleted=true, deletedAt, deletedBy).
+    *   `BR052`: Invalidate cache Redis, ghi audit event (MSG35).
+*   **Liên kết ASR:** ASR-DI-10 (No cross-service cascade, check enrollment before delete), ASR-DI-03 (Soft delete)
+*   **Liên kết ADD:** Table 32
+*   **Liên kết SAD:** §4.3 (Soft-Delete Principle), §3.2.6 (course-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-course.controller.ts](../../apps/course-service/src/presentation/http/admin-course.controller.ts)
+    *   UseCase: [delete-course.use-case.ts](../../apps/course-service/src/application/use-cases/delete-course/delete-course.use-case.ts)
+    *   Aggregate: [course.aggregate.ts](../../apps/course-service/src/domain/aggregates/course/course.aggregate.ts) (phương thức `archive`)
+
+---
+
+### 📝 Nhóm 3: Thi Lý Thuyết
+
+#### UC11: Take Theory Exam (Bắt đầu làm bài thi lý thuyết)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên nhấn nút bắt đầu làm bài [btnStartExam].
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực JWT token và kiểm tra quyền làm bài thi của học viên. Nếu không hợp lệ, trả về lỗi `MSG37` (BR053).
+    2. Xác thực tính hợp lệ của `templateId` và `licenseTierId` trong payload. Nếu không đúng, trả về lỗi `MSG36` (BR054).
+    3. Tải thông tin hồ sơ học sinh từ `user-service`, cấu hình thi và template thi tương ứng. Nếu thiếu tài nguyên, trả về lỗi `MSG38` (BR055).
+    4. Gọi API của `question-service` để tự động bốc ngẫu nhiên bộ câu hỏi (UC24) tuân thủ phân bổ chuyên đề của template.
+    5. Khởi tạo phiên thi trên máy chủ (server-authoritative timer). Thiết lập `expiresAt = now + durationMinutes`. Ghi bản chụp cấu hình thi tại thời điểm tạo (Config Snapshot: passingScore, duration, topicDistribution) dưới dạng JSONB trong database (BR056).
+    6. Sử dụng Mapper ánh xạ bộ câu hỏi sang DTO trả về, đảm bảo loại bỏ hoàn toàn các trường đáp án đúng `correctOptionId` và nhãn câu hỏi điểm liệt `isCritical` để chống gian lận (BR057 - ASR-SEC-05).
+    7. Lưu phiên thi với trạng thái `IN_PROGRESS` và trả thông tin bộ câu hỏi cấu trúc bảo mật về cho học viên (BR058).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR053`: JWT validation & exam capability check (MSG37).
+    *   `BR054`: Validate parameters templateId & licenseTier (MSG36).
+    *   `BR055`: Tải cấu hình thi, thông tin hồ sơ của học viên (MSG38).
+    *   `BR056`: Sinh câu hỏi ngẫu nhiên, ghi nhận thời gian hết hạn server-side, lưu JSONB Config Snapshot (MSG39).
+    *   `BR057`: Restricted DTO: Loại bỏ correctOptionId và isCritical khỏi response trả về client.
+    *   `BR058`: Phản hồi bootstrap payload.
+*   **Liên kết ASR:** ASR-PERF-12 (Indexed question select), ASR-DI-08 (Config snapshot), ASR-DI-09 (Topic count check), ASR-REL-02 (Server-side timer), ASR-SEC-05 (Answer confidentiality)
+*   **Liên kết ADD:** Table 10, Table 31, Table 34
+*   **Liên kết SAD:** §5.2.2 (Exam Submission Flow), §3.2.5 (exam-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [exam.controller.ts](../../apps/exam-service/src/presentation/http/exam.controller.ts)
+    *   UseCase: [start-session.use-case.ts](../../apps/exam-service/src/application/use-cases/start-session/start-session.use-case.ts)
+    *   Aggregate: [exam-session.aggregate.ts](../../apps/exam-service/src/domain/aggregates/exam-session/exam-session.aggregate.ts) (phương thức `create`)
+
+#### UC12: Manage Exam Session (Tự động lưu & quản lý phiên thi)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên đánh dấu câu hỏi hoặc chọn đáp án trong quá trình thi.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực quyền tham gia và sở hữu phiên thi của học viên từ token. Nếu không được phép, trả về lỗi `MSG41` (BR059).
+    2. Xác thực tính đúng đắn của tham số (`attemptId`, `questionId`, `selectedOptionId`...). Nếu lỗi, trả về lỗi `MSG40` (BR060).
+    3. Kiểm tra xem phiên thi có còn hạn làm bài không (`expiresAt > now`). Nếu đã hết giờ, tự động kích hoạt luồng nộp và chấm điểm bài thi (UC13/14) ngay lập tức và trả trạng thái nộp bài cho học viên (BR061).
+    4. Lưu đáp án/bookmark vào DB thông qua câu lệnh upsert (Idempotent Write) để tránh lưu trùng dữ liệu khi có retry từ network (BR062).
+    5. Trả về trạng thái làm bài cập nhật mới nhất cho học viên (BR063).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR059`: Quyền RBAC truy cập phiên thi (MSG41).
+    *   `BR060`: Validate input parameters (MSG40).
+    *   `BR061`: Tự động nộp bài (auto-submit) khi quá giờ làm bài server-side (MSG42).
+    *   `BR062`: Ghi dữ liệu idempotent upsert của câu trả lời/bookmark, lưu thời gian còn lại.
+    *   `BR063`: Trả về trạng thái phiên hiện tại (MSG43).
+*   **Liên kết ASR:** ASR-REL-03 (Idempotent auto-save), ASR-UX-05 (Offline resilience)
+*   **Liên kết ADD:** Table 21, Table 40, Flow 3
+*   **Liên kết SAD:** §5.2.2 (Exam Submission Flow), §4.3 (Idempotency)
+*   **Tham chiếu Codebase:**
+    *   Controller: [exam.controller.ts](../../apps/exam-service/src/presentation/http/exam.controller.ts)
+    *   UseCase: [save-answer.use-case.ts](../../apps/exam-service/src/application/use-cases/save-answer/save-answer.use-case.ts)
+    *   Helper logic: `finalizeExpiredSessionIfNeeded` trong `save-answer.use-case.ts`
+
+#### UC13: Submit Exam (Nộp bài thi)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên nhấn nút nộp bài [btnSubmitExam] hoặc hệ thống tự động nộp khi hết giờ.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực quyền nộp bài của học viên. Nếu không, trả về lỗi `MSG44` (BR064).
+    2. Kiểm tra trạng thái phiên thi và áp dụng chính sách chống nộp bài lặp lại (anti-double-submit). Nếu phiên đã nộp hoặc đang xử lý, trả về lỗi `MSG45` (BR065).
+    3. Xác minh tính tồn tại của phiên thi. Nếu không thấy, trả về lỗi `MSG46` (BR066).
+    4. Khóa toàn bộ các câu trả lời (không cho chỉnh sửa thêm), cập nhật trạng thái phiên thi thành `COMPLETED` và chạy đồng bộ luồng chấm điểm (UC14) bên trong cùng một database transaction (BR067).
+    5. Sau khi commit transaction thành công, phát đi sự kiện `exam.session.completed` qua outbox để đồng bộ sang `analytics-service` và trả kết quả nộp bài thành công về cho học sinh (BR068).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR064`: JWT & privilege check (MSG44).
+    *   `BR065`: Chống nộp trùng lặp bằng cách kiểm tra trạng thái phiên thi (MSG45).
+    *   `BR066`: Check tồn tại phiên thi (MSG46).
+    *   `BR067`: Transaction DB đóng gói nguyên tử (atomic): Khóa câu trả lời, update status thành COMPLETED, và chấm điểm đồng bộ.
+    *   `BR068`: Transaction commit, outbox event publish, trả về kết quả (MSG47).
+*   **Liên kết ASR:** ASR-REL-04 (Atomic submission + grading + result write), ASR-DI-01 (Immutable completed exam result), ASR-DI-07 (Outbox event written in same transaction)
+*   **Liên kết ADD:** Table 23, Table 25, Table 30, Scenario 1
+*   **Liên kết SAD:** §5.2.2 (Exam Submission Flow), §6.3.3 (Answer Confidentiality)
+*   **Tham chiếu Codebase:**
+    *   Controller: [exam.controller.ts](../../apps/exam-service/src/presentation/http/exam.controller.ts)
+    *   UseCase: [submit-session.use-case.ts](../../apps/exam-service/src/application/use-cases/submit-session/submit-session.use-case.ts)
+    *   Aggregate: [exam-session.aggregate.ts](../../apps/exam-service/src/domain/aggregates/exam-session/exam-session.aggregate.ts) (phương thức `submit`)
+
+#### UC14: Grade Exam (Hệ thống chấm điểm)
+*   **Dịch vụ:** `exam-service` (Internal process)
+*   **Tác nhân (Actor):** Hệ thống (System)
+*   **Kích hoạt (Trigger):** Được gọi đồng bộ từ bên trong transaction nộp bài của UC13.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác minh bối cảnh gọi hàm (phải được gọi nội bộ bên trong transaction của UC13). Nếu bị gọi độc lập từ API ngoài, hủy bỏ và ghi log lỗi `MSG48` (BR069).
+    2. Xác thực tính đúng đắn của tham số chấm điểm. Nếu lỗi, trả về lỗi `MSG49` (BR070).
+    3. Tải danh sách đáp án học viên chọn, đáp án đúng và định nghĩa các câu hỏi điểm liệt (`isCritical`). Nếu thiếu, trả về lỗi `MSG50` (BR071).
+    4. Thực hiện thuật toán chấm điểm:
+        *   So sánh đáp án đã làm với đáp án đúng để tính điểm số (`score`).
+        *   Kiểm tra xem học viên có trả lời sai câu hỏi điểm liệt nào không (`criticalMistakes`).
+        *   Áp dụng quy tắc xét đỗ/trượt: Bài thi bị coi là TRƯỢT nếu số câu đúng nhỏ hơn điểm tối thiểu quy định, HOẶC số câu điểm liệt bị sai lớn hơn 0 (hoặc lớn hơn `maxCriticalMistakes` cấu hình). Ngược lại là ĐỖ. Ghi nhận kết quả `isPassed` (BR072).
+    5. Ghi kết quả chấm điểm vào database local và trả gói dữ liệu kết quả chấm về cho luồng nộp bài (BR073).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR069`: Kiểm tra ngữ cảnh gọi hàm nội bộ (MSG48).
+    *   `BR070`: Validate trạng thái phiên thi đủ điều kiện chấm (MSG49).
+    *   `BR071`: Tải câu trả lời và thông tin câu hỏi điểm liệt (MSG50).
+    *   `BR072`: Thuật toán chấm điểm: Tính điểm đúng, đếm lỗi câu hỏi điểm liệt, áp dụng ngưỡng đỗ/trượt.
+    *   `BR073`: Lưu kết quả và phản hồi (MSG51).
+*   **Liên kết ASR:** ASR-REL-04 (Atomic submission + grading), ASR-DI-02 (Fatal question definitions loaded only at grading time, never exposed)
+*   **Liên kết ADD:** Table 23, Table 25, Table 30, Scenario 1
+*   **Liên kết SAD:** §5.2.2 (Exam Submission Flow), §6.3.3 (Answer Confidentiality)
+*   **Tham chiếu Codebase:**
+    *   Aggregate: [exam-session.aggregate.ts](../../apps/exam-service/src/domain/aggregates/exam-session/exam-session.aggregate.ts) (phương thức `grade` và `grade` trên từng question)
+    *   Repository: [prisma-exam-session.repository.ts](../../apps/exam-service/src/infrastructure/persistence/prisma/prisma-exam-session.repository.ts)
+
+#### UC15: View Exam Results (Xem kết quả bài thi)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên click mở xem chi tiết kết quả bài thi đã nộp.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực JWT token của học viên. Nếu không hợp lệ, trả về lỗi `MSG53` (BR074).
+    2. Xác minh quyền sở hữu: Học viên chỉ được xem bài thi của chính mình (`studentId` trong token khớp với `studentId` của bài thi). Nếu sai phạm, trả về lỗi `MSG52` (BR075).
+    3. Tra cứu thông tin bài thi đã chấm trong database. Nếu không tìm thấy, trả về lỗi `MSG54` (BR076).
+    4. Chiếu dữ liệu (projection) xây dựng DTO phản hồi chứa điểm số, trạng thái đỗ/trượt, thông tin số câu điểm liệt bị sai và chi tiết từng câu trả lời đúng/sai để học sinh đối chiếu (BR077 - chỉ trả về thông tin đáp án đúng khi bài thi đã ở trạng thái COMPLETED).
+    5. Gửi chi tiết kết quả thi về cho client hiển thị (BR078).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR074`: JWT authentication (MSG53).
+    *   `BR075`: Kiểm tra quyền sở hữu bài thi (MSG52).
+    *   `BR076`: Check tồn tại bài thi (MSG54).
+    *   `BR077`: Mapping dữ liệu kết quả thi (điểm, kết quả đỗ/trượt, chi tiết câu sai).
+    *   `BR078`: Trả kết quả kết quả chi tiết về cho client (MSG55).
+*   **Liên kết ASR:** ASR-REL-07 (Indexed lookup on query results), ASR-SEC-05 (Answer confidentiality - correct answer only sent after submit)
+*   **Liên kết ADD:** Table 24, Table 5, Scenario 4
+*   **Liên kết SAD:** §6.3.3 (Answer Confidentiality), §3.2.5 (exam-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [exam.controller.ts](../../apps/exam-service/src/presentation/http/exam.controller.ts) (GET `/exams/sessions/:id`)
+    *   UseCase: [get-session-detail.use-case.ts](../../apps/exam-service/src/application/use-cases/get-session-detail/get-session-detail.use-case.ts)
+    *   Mapper: [exam-session.mapper.ts](../../apps/exam-service/src/infrastructure/persistence/mappers/exam-session.mapper.ts)
+
+#### UC16: Review Exams (Xem lịch sử thi lý thuyết)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên mở phân hệ xem danh sách lịch sử thi.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực JWT token của học viên. Nếu không hợp lệ, trả về lỗi `MSG57` (BR079).
+    2. Xác thực tính đúng đắn của các bộ lọc tìm kiếm và phân trang (page, size). Nếu không hợp lệ, trả về lỗi `MSG56` (BR080).
+    3. Tra cứu lịch sử thi trong database sử dụng index trên `studentId` kết hợp phân trang bắt buộc (page/size). Nếu không có bản ghi nào, trả về lỗi `MSG58` (hoặc trả về danh sách rỗng) (BR081).
+    4. Xây dựng trục danh sách lịch sử làm bài thi theo trình tự thời gian bao gồm trạng thái và điểm số đạt được (BR082).
+    5. Gửi danh sách lịch sử thi về cho client hiển thị (BR083).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR079`: JWT authentication check (MSG57).
+    *   `BR080`: Validate phân trang và bộ lọc (MSG56).
+    *   `BR081`: Tra cứu indexed query và áp dụng skip/take bắt buộc (MSG58).
+    *   `BR082`: Chiếu danh sách lịch sử thi theo trật tự thời gian.
+    *   `BR083`: Trả danh sách về cho client (MSG59).
+*   **Liên kết ASR:** ASR-PERF-03 (Mandatory pagination), ASR-PERF-10 (Exam history index)
+*   **Liên kết ADD:** Section 3.2.5, Table 24
+*   **Liên kết SAD:** §3.2.5 (exam-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [exam.controller.ts](../../apps/exam-service/src/presentation/http/exam.controller.ts) (GET `/exams/sessions`)
+    *   UseCase: [list-sessions.use-case.ts](../../apps/exam-service/src/application/use-cases/list-sessions/list-sessions.use-case.ts)
+
+---
+
+### 🗄️ Nhóm 4: Ngân Hàng Câu Hỏi
+
+#### UC17: Search Question Bank (Tìm kiếm ngân hàng câu hỏi)
+*   **Dịch vụ:** `question-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor nhập từ khóa tìm kiếm trên màn hình quản lý câu hỏi.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực phân quyền của Actor. Chỉ cho phép Admin, Center Manager. Nếu không được phép, trả về lỗi `MSG61` (BR084).
+    2. Xác thực các tham số đầu vào (`keyword`, `licenseTierId`, phân trang `page`, `size`). Nếu không đúng, trả về lỗi `MSG60` (BR085).
+    3. Xác minh phạm vi tìm kiếm. Nếu lỗi, trả về lỗi `MSG62` (BR086).
+    4. Thực hiện tìm kiếm nhanh từ khóa (`contains` không phân biệt hoa thường) trên DB. PostgreSQL tự động sử dụng `pg_trgm` GIN index trên cột `content` để tăng tốc câu lệnh tìm kiếm tương tự `ILIKE` (BR087).
+    5. Trả kết quả danh sách câu hỏi phân trang về cho Actor hiển thị (BR088).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR084`: RBAC checks (MSG61).
+    *   `BR085`: Validate input query parameters (MSG60).
+    *   `BR086`: Check search scope in database (MSG62).
+    *   `BR087`: Thực thi tìm kiếm nhanh sử dụng GIN trigram index trên DB và phân trang.
+    *   `BR088`: Trả danh sách câu hỏi phân trang về client (MSG63).
+*   **Liên kết ASR:** ASR-PERF-11 (pg_trgm GIN index on content for ILIKE keyword search)
+*   **Liên kết ADD:** Section 3.2.7 (question-service)
+*   **Liên kết SAD:** §3.2.7 (question-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-question.controller.ts](../../apps/question-service/src/presentation/http/admin-question.controller.ts) (GET `/admin/questions`)
+    *   UseCase: [search-questions.use-case.ts](../../apps/question-service/src/application/use-cases/search-questions/search-questions.use-case.ts)
+    *   DB Migration: [20260531090000_add_content_trgm_index/migration.sql](../../apps/question-service/prisma/migrations/20260531090000_add_content_trgm_index/migration.sql)
+
+#### UC18: Create Question (Thêm câu hỏi mới)
+*   **Dịch vụ:** `question-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit form tạo câu hỏi mới.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền tạo câu hỏi của Actor. Nếu không được phép, trả về lỗi `MSG65` (BR089).
+    2. Xác thực nội dung nhập vào: câu hỏi, các đáp án, đáp án đúng, nhãn chuyên đề, cờ câu hỏi điểm liệt (`isCritical`). Nếu lỗi, trả về lỗi `MSG64` (BR090).
+    3. Tính toán mã băm chữ ký nội dung câu hỏi (Content Hash/Signature). Đối chiếu trong DB để phát hiện câu hỏi trùng lặp nội dung. Nếu đã tồn tại, trả về lỗi `MSG66` (BR091).
+    4. Tạo câu hỏi, lưu bản ghi vào `question_db` (BR092).
+    5. Xóa cache và ghi nhận audit log, trả về thông tin câu hỏi mới được tạo thành công (BR093).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR089`: Phân quyền RBAC tạo câu hỏi (MSG65).
+    *   `BR090`: Validate các trường thông tin câu hỏi bắt buộc (MSG64).
+    *   `BR091`: Chống trùng lặp câu hỏi bằng cách so khớp Signature/Hash nội dung (MSG66).
+    *   `BR092`: Lưu trữ DB và cập nhật chỉ mục tìm kiếm.
+    *   `BR093`: Trả về câu hỏi mới tạo thành công (MSG67).
+*   **Liên kết ASR:** ASR-SEC-04 (Centralized RBAC), ASR-PERF-11 (Search index update)
+*   **Liên kết ADD:** Section 3.2.7
+*   **Liên kết SAD:** §3.2.7 (question-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-question.controller.ts](../../apps/question-service/src/presentation/http/admin-question.controller.ts) (POST `/admin/questions`)
+    *   UseCase: [create-question.use-case.ts](../../apps/question-service/src/application/use-cases/create-question/create-question.use-case.ts)
+    *   Aggregate: [question.aggregate.ts](../../apps/question-service/src/domain/aggregates/question/question.aggregate.ts)
+
+#### UC19: Update Question (Cập nhật câu hỏi)
+*   **Dịch vụ:** `question-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor submit form cập nhật câu hỏi.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền cập nhật câu hỏi của Actor. Nếu không được phép, trả về lỗi `MSG71` (BR094).
+    2. Xác thực tính đúng đắn của các trường thay đổi và cờ phiên bản `version` (Optimistic Concurrency Control). Nếu cờ version không khớp, ném lỗi và trả về `MSG68`, `MSG69` hoặc `MSG70` (BR095).
+    3. Tra cứu câu hỏi theo ID trong database. Nếu không tìm thấy, trả về lỗi `MSG72` (BR096).
+    4. Thực hiện ghi nhận các chỉnh sửa vào DB local, tăng số version của bản ghi, lưu bản chụp lịch sử thay đổi (version snapshot) phục vụ audit (BR097).
+    5. Xóa cache, cập nhật chỉ mục tìm kiếm và trả câu hỏi cập nhật về client (BR098).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR094`: Kiểm tra quyền RBAC cập nhật câu hỏi (MSG71).
+    *   `BR095`: Validate thông tin cập nhật & Optimistic Concurrency check (MSG68/MSG69/MSG70).
+    *   `BR096`: Check tồn tại câu hỏi (MSG72).
+    *   `BR097`: Update DB local, tăng version, tạo history snapshot.
+    *   `BR098`: Vô hiệu hóa cache, trả về kết quả cập nhật (MSG73).
+*   **Liên kết ASR:** ASR-SEC-04 (RBAC)
+*   **Liên kết ADD:** Section 3.2.7
+*   **Liên kết SAD:** §3.2.7 (question-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-question.controller.ts](../../apps/question-service/src/presentation/http/admin-question.controller.ts) (PUT `/admin/questions/:id`)
+    *   UseCase: [update-question.use-case.ts](../../apps/question-service/src/application/use-cases/update-question/update-question.use-case.ts)
+    *   Aggregate: [question.aggregate.ts](../../apps/question-service/src/domain/aggregates/question/question.aggregate.ts)
+
+#### UC20: Delete Question (Xóa câu hỏi)
+*   **Dịch vụ:** `question-service`
+*   **Tác nhân (Actor):** Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor click xác nhận xóa câu hỏi [btnDeleteQuestion].
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền xóa của Actor. Nếu không được phép, trả về lỗi `MSG75` (BR099).
+    2. Kiểm tra chính sách an toàn dữ liệu (safe-delete policy). Nếu câu hỏi đã từng được làm trong các bài thi lịch sử (để đảm bảo tính toàn vẹn dữ liệu thi của học sinh), hệ thống cấm xóa cứng (phương thức xóa vật lý bị cấm), trả về lỗi `MSG74` (BR100).
+    3. Xác minh câu hỏi tồn tại trong DB. Nếu không tìm thấy, trả về lỗi `MSG72` (BR101).
+    4. Thực hiện xóa mềm bằng cách cập nhật cờ trạng thái `isDeleted = true` trong database (BR102).
+    5. Xóa cache và trả về kết quả xóa thành công (BR103).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR099`: Quyền RBAC xóa câu hỏi (MSG75).
+    *   `BR100`: Ngăn chặn xóa vật lý nếu câu hỏi đã từng được làm trong các bài thi lịch sử (MSG74).
+    *   `BR101`: Check tồn tại câu hỏi (MSG72).
+    *   `BR102`: Thực hiện soft-delete (isDeleted=true) và vô hiệu hóa cache.
+    *   `BR103`: Phản hồi kết quả xóa câu hỏi thành công (MSG76).
+*   **Liên kết ASR:** ASR-SEC-06 (Physical deletion of questions in exam history prohibited; soft-delete only)
+*   **Liên kết ADD:** Table 32
+*   **Liên kết SAD:** §4.3 (Soft-Delete Principle)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-question.controller.ts](../../apps/question-service/src/presentation/http/admin-question.controller.ts) (DELETE `/admin/questions/:id`)
+    *   UseCase: [delete-question.use-case.ts](../../apps/question-service/src/application/use-cases/delete-question/delete-question.use-case.ts)
+    *   Aggregate: [question.aggregate.ts](../../apps/question-service/src/domain/aggregates/question/question.aggregate.ts) (phương thức `delete`)
+
+---
+
+### 📝 Nhóm 5: Thiết Lập Đề Thi & Tạo Đề Tự Động
+
+#### UC21: Create Exam Template (Tạo cấu trúc đề thi mẫu)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Admin
+*   **Kích hoạt (Trigger):** Admin submit form tạo cấu trúc đề thi mẫu mới.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra vai trò của Actor. Chỉ cho phép vai trò Admin. Nếu không được phép, trả về lỗi `MSG78` (BR104).
+    2. Xác thực cấu trúc mẫu: kiểm tra xem tổng số câu hỏi phân bổ của các chuyên đề (`topicDistribution`) có bằng tổng số lượng câu hỏi quy định (`totalQuestions`) không. Đồng thời validate điểm đỗ, số câu điểm liệt. Nếu sai lệch, trả về lỗi `MSG77` (BR105).
+    3. Kiểm tra hạng bằng lái gán cho mẫu có tồn tại trong hệ thống không. Nếu không, trả về lỗi `MSG79` (BR106).
+    4. Khởi tạo template và ghi cấu hình chấm thi mặc định vào database local trong cùng một transaction DB (BR107).
+    5. Trả thông tin template mới tạo thành công về client (BR108).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR104`: Phân quyền RBAC dành riêng cho Admin (MSG78).
+    *   `BR105`: Validate cấu trúc chuyên đề: tổng số câu hỏi chuyên đề phải khớp totalQuestions (MSG77).
+    *   `BR106`: Validate hạng bằng lái liên đới (MSG79).
+    *   `BR107`: Ghi DB đồng thời template + default grading rules.
+    *   `BR108`: Trả về kết quả khởi tạo (MSG80).
+*   **Liên kết ASR:** ASR-DI-04 (Server-side validation of template rules), ASR-MOD-01 (All exam rules stored as data)
+*   **Liên kết ADD:** Table 31, Section 3.2.5
+*   **Liên kết SAD:** §3.2.5 (exam-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-template.controller.ts](../../apps/exam-service/src/presentation/http/admin-template.controller.ts) (POST `/admin/exams/templates`)
+    *   UseCase: [create-template.use-case.ts](../../apps/exam-service/src/application/use-cases/create-template/create-template.use-case.ts)
+    *   Aggregate: [exam-template.aggregate.ts](../../apps/exam-service/src/domain/aggregates/exam-template/exam-template.aggregate.ts) (phương thức `create` & `validate`)
+
+#### UC22: Update Exam Template (Cập nhật đề thi mẫu)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Admin
+*   **Kích hoạt (Trigger):** Admin submit form cập nhật cấu trúc đề thi mẫu.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra vai trò Admin của Actor. Nếu không, trả về lỗi `MSG78` (BR109).
+    2. Xác thực tính đúng đắn của các trường sửa đổi và kiểm tra phiên bản bản ghi (Optimistic Concurrency Control). Nếu cờ version không khớp, trả về lỗi `MSG81` hoặc `MSG82` (BR110).
+    3. Tra cứu template trong DB và kiểm tra cờ khóa chỉnh sửa (nếu template đang được sử dụng để sinh đề thi chính thức hoạt động). Nếu không tìm thấy, trả về lỗi `MSG83` (BR111).
+    4. Thực hiện lưu các cập nhật vào DB local trong một transaction (BR112).
+    5. Trả kết quả template cập nhật thành công về client (BR113).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR109`: RBAC Admin authorization (MSG78).
+    *   `BR110`: Validate parameters & Optimistic Concurrency check (MSG81/MSG82).
+    *   `BR111`: Check tồn tại template và trạng thái khóa sửa đổi (MSG83).
+    *   `BR112`: Update DB transaction.
+    *   `BR113`: Trả kết quả cập nhật template thành công (MSG84).
+*   **Liên kết ASR:** ASR-DI-04 (Server-side validation of template rules)
+*   **Liên kết ADD:** Section 3.2.5
+*   **Liên kết SAD:** §3.2.5 (exam-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-template.controller.ts](../../apps/exam-service/src/presentation/http/admin-template.controller.ts) (PUT `/admin/exams/templates/:id`)
+    *   UseCase: [update-template.use-case.ts](../../apps/exam-service/src/application/use-cases/update-template/update-template.use-case.ts)
+    *   Aggregate: [exam-template.aggregate.ts](../../apps/exam-service/src/domain/aggregates/exam-template/exam-template.aggregate.ts) (phương thức `update`)
+
+#### UC23: Delete Exam Template (Xóa đề thi mẫu)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Admin
+*   **Kích hoạt (Trigger):** Admin xác nhận yêu cầu xóa đề thi mẫu.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra vai trò Admin của Actor. Nếu không, trả về lỗi `MSG78` (BR114).
+    2. Tra cứu template theo ID trong database. Nếu không tìm thấy, trả về lỗi `MSG83` (BR115).
+    3. Kiểm tra xem template có đang được sử dụng trong các lịch trình thi hoặc lượt thi nào đang hoạt động không. Nếu có ràng buộc phụ thuộc, cấm xóa (BR116).
+    4. Thực hiện xóa mềm bằng cách cập nhật cờ `isDeleted = true` và ghi nhận audit log vào DB local trong một transaction (BR117).
+    5. Trả kết quả xóa đề thi mẫu thành công về client (BR118).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR114`: Quyền RBAC của Admin (MSG78).
+    *   `BR115`: Check tồn tại template (MSG83).
+    *   `BR116`: Ngăn chặn xóa template đang được tham chiếu hoạt động.
+    *   `BR117`: Soft-delete & write audit logs trong database transaction.
+    *   `BR118`: Trả về kết quả xóa thành công (MSG86).
+*   **Liên kết ASR:** ASR-DI-03 (Soft delete)
+*   **Liên kết ADD:** Table 32
+*   **Liên kết SAD:** §4.3 (Soft-Delete Principle)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-template.controller.ts](../../apps/exam-service/src/presentation/http/admin-template.controller.ts) (DELETE `/admin/exams/templates/:id`)
+    *   UseCase: [delete-template.use-case.ts](../../apps/exam-service/src/application/use-cases/delete-template/delete-template.use-case.ts)
+    *   Aggregate: [exam-template.aggregate.ts](../../apps/exam-service/src/domain/aggregates/exam-template/exam-template.aggregate.ts) (phương thức `archive`)
+
+#### UC24: Auto-generate Exam Papers (Hệ thống tự động tạo đề thi)
+*   **Dịch vụ:** `exam-service` (Internal process)
+*   **Tác nhân (Actor):** Hệ thống (System)
+*   **Kích hoạt (Trigger):** Kích hoạt ngầm định khi học viên bắt đầu lượt thi mới (UC11).
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác minh bối cảnh gọi hàm và cờ quyền `Generate_Exam`. Nếu lỗi, trả về lỗi phân quyền (BR119).
+    2. Xác thực cấu hình template đầu vào (`topicDistribution`, số lượng câu cần tạo, các giới hạn chuyên đề...) (BR120).
+    3. Hệ thống gửi yêu cầu tải danh sách câu hỏi theo chuyên đề từ `question-service` sử dụng indexed queries (BR121).
+    4. Áp dụng thuật toán sinh đề:
+        *   Rút ngẫu nhiên các câu hỏi cho từng chủ đề theo số lượng quy định.
+        *   Cân bằng số câu điểm liệt: Thay thế câu hỏi thường bằng câu điểm liệt để đạt chính xác số câu điểm liệt quy định trong template.
+        *   Xáo trộn thứ tự câu hỏi và xáo trộn các phương án trả lời trong từng câu hỏi (BR122).
+    5. Lưu đề thi hoàn chỉnh dưới dạng danh sách liên kết câu hỏi gắn kèm trong aggregate `ExamSession` của học viên (BR123).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR119`: Quyền thực thi sinh đề thi của hệ thống.
+    *   `BR120`: Validate cấu hình phân bổ câu hỏi.
+    *   `BR121`: Rút trích câu hỏi bằng indexed query tránh full-table scan.
+    *   `BR122`: Thuật toán xáo trộn câu hỏi, xáo trộn đáp án và cân bằng số câu điểm liệt.
+    *   `BR123`: Persist đề thi vào DB, trả kết quả (MSG90).
+*   **Liên kết ASR:** ASR-DI-09 (Question count check & pool validation), ASR-PERF-12 (Question selection via indexed query)
+*   **Liên kết ADD:** Section 3.2.5, Section 3.6.1 Flow 1
+*   **Liên kết SAD:** §5.2.2 (Exam Submission Flow)
+*   **Tham chiếu Codebase:**
+    *   Helper logic: phương thức `selectQuestions` trong [start-session.use-case.ts](../../apps/exam-service/src/application/use-cases/start-session/start-session.use-case.ts)
+
+---
+
+### 📊 Nhóm 6: Theo Dõi Tiến Trình Học Tập & Cảnh Báo
+
+#### UC25: View Student List (Xem danh sách học viên)
+*   **Dịch vụ:** `user-service`
+*   **Tác nhân (Actor):** Instructor, Admin, Center Manager
+*   **Kích hoạt (Trigger):** Actor mở phân hệ quản lý danh sách học sinh.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực JWT token của Actor. Chỉ cho phép các vai trò Instructor, Admin, Center Manager truy cập. Nếu không, trả về lỗi `MSG92` (BR124).
+    2. Xác thực tính đúng đắn của các bộ lọc tìm kiếm (`classFilter`, `search`, phân trang `page`, `size`...). Nếu không hợp lệ, trả về lỗi `MSG91` (BR125).
+    3. Kiểm tra sự tồn tại của nguồn dữ liệu học viên cần truy cập. Nếu không thấy, trả về lỗi `MSG93` (BR126).
+    4. Thực hiện truy vấn danh sách học viên từ database sử dụng index trên cột `fullName`, `email`, hoặc `phoneNumber` kết hợp phân trang bắt buộc (BR127).
+    5. Trả về danh sách học viên kèm theo các thẻ trạng thái và thông tin liên quan (BR128).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR124`: Quyền RBAC truy xuất danh sách học viên (MSG92).
+    *   `BR125`: Validate các tham số tìm kiếm, phân trang (MSG91).
+    *   `BR126`: Kiểm tra sự tồn tại của roster (MSG93).
+    *   `BR127`: Thực thi truy vấn DB tối ưu qua các chỉ mục trigram tìm kiếm nhanh.
+    *   `BR128`: Trả kết quả danh sách học viên (MSG94).
+*   **Liên kết ASR:** ASR-PERF-02 (GIN trigram index on search fields for fast user list queries)
+*   **Liên kết ADD:** Table 4, Section 3.2.1
+*   **Liên kết SAD:** §3.2.1 (user-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-user.controller.ts](../../apps/user-service/src/presentation/http/admin-user.controller.ts) (GET `/admin/users`)
+    *   UseCase: [list-users.use-case.ts](../../apps/user-service/src/application/use-cases/list-users/list-users.use-case.ts)
+
+#### UC26: Track Learning Progress (Theo dõi tiến trình học tập của học viên)
+*   **Dịch vụ:** `analytics-service`
+*   **Tác nhân (Actor):** Instructor, Admin
+*   **Kích hoạt (Trigger):** Actor mở bảng thống kê tiến trình học tập của một hoặc nhiều học viên.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực phân quyền truy cập thông tin học tập của Actor. Nếu không được phép, trả về lỗi `MSG96` (BR129).
+    2. Xác thực tính hợp lệ của phạm vi truy vấn (học sinh, khoảng thời gian lọc...). Nếu không hợp lệ, trả về lỗi `MSG95` (BR130).
+    3. Hệ thống kiểm tra nguồn dữ liệu thống kê trong `analytics_db` (bảng `ProgressStat`). Nếu không tồn tại, trả về lỗi `MSG97` (BR131).
+    4. Hệ thống tải trực tiếp dữ liệu thống kê đã được tính toán sẵn (Read Projection - CQRS), tính toán thêm xu hướng học tập (trendline) và điểm số rủi ro của học sinh mà không chạy các câu lệnh tính toán sum/count thời gian thực trên bảng lớn (BR132).
+    5. Trả về bảng tổng hợp kết quả học tập cho Actor hiển thị trực quan (BR133).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR129`: Kiểm tra quyền xem tiến trình học tập của Actor (MSG96).
+    *   `BR130`: Validate phạm vi truy xuất thông tin (MSG95).
+    *   `BR131`: Check tồn tại của bảng thống kê ProgressStat (MSG97).
+    *   `BR132`: Tải dữ liệu pre-computed projection, tính tỷ lệ hoàn thành và xu hướng 30 ngày.
+    *   `BR133`: Phản hồi bảng thống kê dữ liệu học tập (MSG98).
+*   **Liên kết ASR:** ASR-PERF-04 (Pre-computed dashboard stats on ProgressStat), ASR-PERF-07 (Chart data from aggregation tables, no Redis)
+*   **Liên kết ADD:** Table 11, Table 13, Section 3.2.9
+*   **Liên kết SAD:** §5.2.3 (Progress Dashboard Read Flow), §3.2.9 (analytics-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [analytics.controller.ts](../../apps/analytics-service/src/presentation/http/analytics.controller.ts) (GET `/analytics/students/:studentId/progress`)
+    *   UseCase: [get-progress.use-case.ts](../../apps/analytics-service/src/application/use-cases/get-progress/get-progress.use-case.ts)
+
+#### UC27: View Exam History (Xem lịch sử thi của học viên)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Instructor, Admin
+*   **Kích hoạt (Trigger):** Actor mở xem danh sách lịch sử thi của một học sinh cụ thể trên dashboard quản trị.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực phân quyền xem lịch sử thi của Actor. Nếu không được phép, trả về lỗi `MSG100` (BR134).
+    2. Xác thực tính hợp lệ của bộ lọc truy vấn (phân trang, khoảng thời gian...). Nếu lỗi, trả về lỗi `MSG99` (BR135).
+    3. Tra cứu cơ sở dữ liệu lịch sử thi. Nếu không tìm thấy lượt thi nào của học sinh, trả về lỗi `MSG101` (BR136).
+    4. Hệ thống thực hiện truy vấn cơ sở dữ liệu sử dụng chỉ mục có sẵn trên trường `studentId` kết hợp phân trang bắt buộc để xây dựng trục lịch sử thi (BR137).
+    5. Trả về lịch sử thi đầy đủ cho Actor hiển thị (BR138).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR134`: Quyền RBAC truy xuất lịch sử thi (MSG100).
+    *   `BR135`: Validate các filter query (MSG99).
+    *   `BR136`: Kiểm tra tồn tại dữ liệu thi của học sinh (MSG101).
+    *   `BR137`: Truy xuất dữ liệu tối ưu qua index cột studentId và phân trang bắt buộc.
+    *   `BR138`: Trả kết quả danh sách bài thi lịch sử (MSG102).
+*   **Liên kết ASR:** ASR-PERF-03 (Mandatory pagination), ASR-PERF-10 (Exam history composite index)
+*   **Liên kết ADD:** Section 3.2.5
+*   **Liên kết SAD:** §3.2.5 (exam-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [admin-exam-session.controller.ts](../../apps/exam-service/src/presentation/http/admin-exam-session.controller.ts) (GET `/admin/exams/sessions`)
+    *   UseCase: [list-sessions.use-case.ts](../../apps/exam-service/src/application/use-cases/list-sessions/list-sessions.use-case.ts)
+
+#### UC28: Reset Learning Progress (Reset tiến trình học tập)
+*   **Dịch vụ:** `course-service` + `analytics-service`
+*   **Tác nhân (Actor):** Student HOẶC Admin
+*   **Kích hoạt (Trigger):** Học viên yêu cầu reset lại tiến trình học tập của mình (hoặc Admin reset hộ).
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực phân quyền thực hiện reset. Nếu không đủ quyền, trả về `MSG104` (BR139).
+    2. Kiểm tra chính sách cooldown reset (24 giờ): Nếu Actor thực hiện reset là Học viên (Student) và đã có lượt reset trước đó dưới 24 giờ (`lastResetAt` cách hiện tại dưới 24 giờ), hệ thống ngăn chặn và trả về lỗi `MSG104`. Nếu Actor là Admin/Staff, bỏ qua giới hạn cooldown này (BR140 - Gap 2 đã sửa).
+    3. Tra cứu thông tin khóa học đăng ký (enrollment) tương ứng. Nếu không tìm thấy, trả về `MSG105` (BR141).
+    4. Thực hiện cập nhật mốc thời gian reset `lastResetAt = now` và thiết lập lại các chỉ số học tập của enrollment về mặc định (0%) trong transaction (BR142).
+    5. Xóa cache và phát đi sự kiện `course.enrollment.progress-reset` qua outbox. `analytics-service` lắng nghe event và xóa toàn bộ dữ liệu thống kê cũ của học viên đó, phản hồi thành công (BR143).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR139`: Quyền RBAC reset tiến trình (MSG104).
+    *   `BR140`: Cooldown 24h reset tiến trình cho học viên (Student); staff/admin được bypass (MSG103/MSG104).
+    *   `BR141`: Kiểm tra sự tồn tại của Enrollment (MSG105).
+    *   `BR142`: Ghi nhận lastResetAt, reset các trường tiến trình, tạo audit event trong transaction.
+    *   `BR143`: Outbox event trigger sang analytics-service để xóa projection cũ, trả về kết quả (MSG106).
+*   **Liên kết ASR:** ASR-REL-05 (Reset never physically deletes exam records; progress reset via event)
+*   **Liên kết ADD:** Table 22, Section 3.2.9
+*   **Liên kết SAD:** §3.2.9 (analytics-service), §5.2.3 (Progress Dashboard Read Flow)
+*   **Tham chiếu Codebase:**
+    *   Controller: [enrollment.controller.ts](../../apps/course-service/src/presentation/http/enrollment.controller.ts) (POST `/enrollments/:id/reset-progress`)
+    *   UseCase: [reset-enrollment-progress.use-case.ts](../../apps/course-service/src/application/use-cases/reset-enrollment-progress/reset-enrollment-progress.use-case.ts)
+    *   Aggregate: [course-enrollment.aggregate.ts](../../apps/course-service/src/domain/aggregates/course-enrollment/course-enrollment.aggregate.ts)
+    *   Consumer: [messaging.controller.ts](../../apps/analytics-service/src/presentation/messaging/messaging.controller.ts)
+
+#### UC29: Send Academic Warnings (Gửi cảnh báo học tập)
+*   **Dịch vụ:** `notification-service`
+*   **Tác nhân (Actor):** Instructor, Admin
+*   **Kích hoạt (Trigger):** Actor submit form gửi tin nhắn cảnh báo học sinh học yếu.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra quyền gửi tin cảnh báo của Actor. Nếu không được phép, trả về lỗi `MSG108` (BR144).
+    2. Xác thực nội dung và kênh truyền của tin cảnh báo. Nếu không hợp lệ, trả về lỗi `MSG107` (BR145).
+    3. Xác minh tính tồn tại của các học viên nhận tin. Nếu không thấy, trả về lỗi `MSG109` (BR146).
+    4. Ghi nhận cảnh báo vào `notification_db`. Đẩy các tin nhắn vào hàng đợi bất đồng bộ của RabbitMQ để xử lý tự động (in-app, email...) (BR147).
+    5. Phản hồi xác nhận tiếp nhận và đang xử lý gửi (HTTP 202) về giao diện cho Actor (BR148).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR144`: Quyền gửi academic warnings (MSG108).
+    *   `BR145`: Validate các delivery channels và nội dung cảnh báo (MSG107).
+    *   `BR146`: Check tồn tại người nhận cảnh báo (MSG109).
+    *   `BR147`: Đẩy tin nhắn cảnh báo vào hàng đợi RabbitMQ để gửi async (Eventually Consistent).
+    *   `BR148`: Trả về mã HTTP 202 xác nhận đã hàng đợi thành công (MSG110).
+*   **Liên kết ASR:** ASR-PERF-08 (Async warning messages, return HTTP 202 immediately)
+*   **Liên kết ADD:** Section 3.4 (Event Bus), Section 3.2.8
+*   **Liên kết SAD:** §5.2.4 (Async Notification Flow)
+*   **Tham chiếu Codebase:**
+    *   Controller: [notification.controller.ts](../../apps/notification-service/src/presentation/http/notification.controller.ts) (POST `/admin/academic-warnings`)
+    *   UseCase: `SendAcademicWarningUseCase` trong [notification.use-cases.ts](../../apps/notification-service/src/application/use-cases/notification.use-cases.ts)
+    *   Retry Worker: [academic-warning-retry.service.ts](../../apps/notification-service/src/infrastructure/retry/academic-warning-retry.service.ts)
+
+---
+
+### 🚗 Nhóm 7: Sa Hình & Thực Hành Lái Xe
+
+#### UC30: View Maneuver Checkpoint Details (Xem chi tiết bài sa hình)
+*   **Dịch vụ:** `simulation-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên click vào một bài sa hình chi tiết trên dashboard.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực token của học viên. Nếu lỗi, trả về lỗi phân quyền `MSG111` (BR149).
+    2. Hệ thống truy vấn thông tin hạng bằng lái của học viên, sau đó lọc danh sách các bài sa hình (maneuvers/checkpoints) tương ứng với hạng bằng lái của học viên đó (BR150).
+    3. Tra cứu cơ sở dữ liệu để lấy thông tin chi tiết của bài sa hình đã chọn. Nếu không tồn tại, trả về lỗi `MSG112` (BR151).
+    4. Trích xuất thông tin sơ đồ sa hình chi tiết, danh sách các checkpoints, các điểm chấm điểm và các quy tắc phạt điểm tương ứng của bài sa hình đó (BR152).
+    5. Gửi thông tin chi tiết về cho client hiển thị trực quan (BR153).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR149`: JWT validation (MSG111).
+    *   `BR150`: License category dynamic filtering (MSG112).
+    *   `BR151`: Checkpoint existence check (MSG112).
+    *   `BR152`: Data structure parsing (map coordinates, score deductor rules).
+    *   `BR153`: Return response details (MSG113).
+*   **Liên kết ASR:** ASR-MOD-03 (Scenarios loaded dynamically at runtime, not hardcoded), ASR-SEC-04 (RBAC)
+*   **Liên kết ADD:** Section 3.2.8 (simulation-service), Table 39, Table 37
+*   **Liên kết SAD:** §3.2.8 (simulation-service), §5.1.8
+*   **Tham chiếu Codebase:**
+    *   Controller: [simulation.controller.ts](../../apps/simulation-service/src/presentation/http/simulation.controller.ts) (GET `/maneuvers/:id`)
+    *   UseCase: `GetManeuverUseCase` trong [simulation.use-cases.ts](../../apps/simulation-service/src/application/use-cases/simulation.use-cases.ts)
+
+#### UC31: View General Maneuver Errors (Xem danh sách lỗi sa hình chung)
+*   **Dịch vụ:** `simulation-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên click xem danh sách "Các Lỗi Sa Hình Chung" trên dashboard.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực JWT token của học viên. Nếu không hợp lệ, trả về lỗi `MSG114` (BR154).
+    2. Truy cập database tra cứu danh sách các lỗi chung của bài thi sa hình (vượt vạch, đâm đụng, quá tốc độ...). Nếu không thấy lỗi nào, trả về lỗi `MSG115` (BR155).
+    3. Hệ thống sử dụng In-memory CacheManager của NestJS để lấy danh sách lỗi đã lưu (TTL 1 giờ). Nếu cache hit, trả về ngay. Nếu cache miss, query DB và ghi vào cache (BR156).
+    4. Hệ thống phân loại các lỗi này theo mức độ nghiêm trọng: Lỗi Vàng (trừ điểm) và Lỗi Đỏ (loại trực tiếp/fatal) và sắp xếp bảng chữ cái (BR157).
+    5. Trả dữ liệu danh sách lỗi chung đã phân loại về cho học sinh hiển thị (BR158).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR154`: Authorization check (MSG114).
+    *   `BR155`: Error reference lookup (MSG115).
+    *   `BR156`: In-memory cache lookup for speed optimization.
+    *   `BR157`: Classification of Yellow (minor penalty) and Red (fatal termination) errors.
+    *   `BR158`: Return categorized response (MSG116).
+*   **Liên kết ASR:** ASR-AV-06 (In-memory cache for static error definitions)
+*   **Liên kết ADD:** Section 3.2.8, Table 39
+*   **Liên kết SAD:** §3.2.8 (simulation-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [simulation.controller.ts](../../apps/simulation-service/src/presentation/http/simulation.controller.ts) (GET `/maneuver-errors`)
+    *   UseCase: `ListManeuverErrorsUseCase` trong [simulation.use-cases.ts](../../apps/simulation-service/src/application/use-cases/simulation.use-cases.ts)
+    *   Cache Service: [maneuver-error-cache.service.ts](../../apps/simulation-service/src/infrastructure/cache/maneuver-error-cache.service.ts)
+
+#### UC32: Review Frequently Missed Questions (Ôn tập câu hay làm sai)
+*   **Dịch vụ:** `exam-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên click yêu cầu tạo bộ câu hỏi ôn tập các câu làm sai nhiều.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực quyền ôn tập của học sinh. Nếu không khớp, trả về lỗi `MSG118` (BR159).
+    2. Xác thực tính đúng đắn của gói tin yêu cầu (giới hạn số câu <= 50, thời gian ôn...). Nếu sai phạm, trả về lỗi `MSG117` (BR160).
+    3. Kiểm tra xem học viên có lịch sử thi làm sai nào không. Nếu không thấy, trả về lỗi `MSG119` (BR161).
+    4. Hệ thống thực hiện câu lệnh truy vấn tìm các câu hỏi học viên trả lời sai nhiều nhất (sắp xếp theo tần suất sai giảm dần, lấy recency làm tie-breaker) (BR162).
+    5. Trả bộ câu hỏi được cá nhân hóa ôn tập về cho học sinh làm bài (BR163).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR159`: JWT & privilege check (MSG118).
+    *   `BR160`: Query limits check: limit max 50 questions (MSG117).
+    *   `BR161`: Missed questions source loading (MSG119).
+    *   `BR162`: Prioritize set based on wrong answer frequency descending, limited to the configured timeframe.
+    *   `BR163`: Return review payload (MSG120).
+*   **Liên kết ASR:** ASR-PERF-09 (Recent records bounded algorithm, max 50 items), ASR-PERF-10 (History search indexing)
+*   **Liên kết ADD:** Table 15, Table 30
+*   **Liên kết SAD:** §3.2.9 (analytics-service), §5.2.2 (Exam Submission Flow)
+*   **Tham chiếu Codebase:**
+    *   Controller: [exam-review.controller.ts](../../apps/exam-service/src/presentation/http/exam-review.controller.ts) (GET `/exams/review/missed-questions`)
+    *   UseCase: [list-missed-questions.use-case.ts](../../apps/exam-service/src/application/use-cases/list-missed-questions/list-missed-questions.use-case.ts)
+
+#### UC33: Logout (Đăng xuất)
+*   **Dịch vụ:** `identity-service`
+*   **Tác nhân (Actor):** All Users
+*   **Kích hoạt (Trigger):** Người dùng bấm nút [btnLogout].
+*   **Luồng Hoạt Động (Flow):**
+    1. Trích xuất token từ request header (BR164).
+    2. Lưu token JWT hiện tại vào Redis Blacklist với TTL bằng thời hạn còn lại của token (hoạt động nguyên tử). Lúc này token bị coi là vô hiệu hóa ngay tức thì (BR165).
+    3. Gửi chỉ thị yêu cầu client tự xóa token khỏi bộ nhớ lưu trữ local (BR166).
+    4. Global `TokenBlacklistGuard` đăng ký trên tất cả các microservices tự động chặn mọi request mang token nằm trong blacklist của Redis (BR167).
+    5. Trả về thông báo đăng xuất thành công (BR168).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR164`: Extract and validate JWT (MSG126/MSG127).
+    *   `BR165`: Blacklist current token in Redis (TTL = remaining lifespan).
+    *   `BR166`: Client token cleanup call.
+    *   `BR167`: TokenBlacklistGuard applied globally checks token status.
+    *   `BR168`: Return logout response (MSG122).
+*   **Liên kết ASR:** ASR-SEC-03 (Token blacklist with TTL equal to remaining lifespan on Redis)
+*   **Liên kết ADD:** Table 3, Section 3.4
+*   **Liên kết SAD:** §6.3.1 (Token Blacklist), §3.2.1
+*   **Tham chiếu Codebase:**
+    *   Controller: [auth.controller.ts](../../apps/identity-service/src/presentation/http/auth.controller.ts) (POST `/auth/logout`)
+    *   UseCase: [logout.use-case.ts](../../apps/identity-service/src/application/use-cases/logout/logout.use-case.ts)
+    *   Guard: [token-blacklist.guard.ts](../../apps/identity-service/src/infrastructure/guards/token-blacklist.guard.ts)
+
+#### UC34: View My Learning Progress (Xem tiến trình học tập cá nhân)
+*   **Dịch vụ:** `analytics-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên navigate tới màn hình Tiến trình học tập trên mobile app.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực JWT token của học viên, xác nhận vai trò Student. Nếu không được phép, trả về lỗi `MSG123` (BR169).
+    2. **Bảo Mật Phạm Vi (Strict Scope):** Trích xuất thông tin `studentId` trực tiếp từ JWT claim (`sub`), cấm lấy từ tham số request để tránh học sinh xem trộm tiến trình của người khác. Nếu không khớp, trả về lỗi `MSG124` (BR170).
+    3. Tra cứu bảng thống kê pre-computed ProgressStat trong database sử dụng index trên `studentId`. Nếu không tìm thấy, trả về rỗng (BR171).
+    4. Trích xuất thông tin tỷ lệ phần trăm lý thuyết đã học, tỷ lệ đỗ bài thi thử, phân tích 5 chủ đề yếu nhất và xu hướng tiến trình 30 ngày (BR172).
+    5. Trả dữ liệu dashboard tiến trình về cho học viên hiển thị trực quan (BR173).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR169`: JWT verification & Student role check (MSG123).
+    *   `BR170`: StudentId extracted ONLY from sub claim of JWT to enforce privacy (MSG124).
+    *   `BR171`: Query precomputed database projection ProgressStat.
+    *   `BR172`: Projection structure: studiedCount, weak topics, trendline.
+    *   `BR173`: Return dashboard progress payload (MSG125).
+*   **Liên kết ASR:** ASR-PERF-04 (Precomputed stats table), ASR-PERF-07 (Charts from aggregation tables)
+*   **Liên kết ADD:** Table 11, Table 13, Section 3.2.9
+*   **Liên kết SAD:** §5.2.3 (Progress Dashboard Read Flow), §3.2.9 (analytics-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [analytics.controller.ts](../../apps/analytics-service/src/presentation/http/analytics.controller.ts) (GET `/analytics/me/progress`)
+    *   UseCase: [get-progress.use-case.ts](../../apps/analytics-service/src/application/use-cases/get-progress/get-progress.use-case.ts)
+
+#### UC35: 2D Driving Practice (Thực hành lái xe 2D)
+*   **Dịch vụ:** `simulation-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Học viên click bắt đầu thực hành lái xe 2D trên mobile/web.
+*   **Luồng Hoạt Động (Flow):**
+    1. Xác thực quyền tham gia của học viên qua JWT. Nếu không khớp, trả về lỗi `MSG128` (BR174).
+    2. Khởi tạo một phiên thực hành 2D (`practice2d` session record) trong database (BR175).
+    3. Xác thực hạng bằng lái và phân quyền học viên. Nếu hạng bằng lái học sinh không được phép sử dụng sa hình 2D, từ chối và trả về lỗi `MSG130` (BR176).
+    4. Kiểm tra tính tương thích thiết bị của học viên (canvas/WebGL). Nếu không được hỗ trợ, trả về lỗi `MSG131` (BR177).
+    5. Xử lý telemetry nhận được trong quá trình học viên tập lái (UC36 - BR178).
+    6. Khi kết thúc phiên lái hoặc học viên bấm lưu, thực hiện lưu trữ summary và lịch sử lỗi (BR179).
+    7. Trả gói dữ liệu tổng kết phiên thực hành lái về cho học viên xem (BR180).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR174`: JWT validation & permission check (MSG128).
+    *   `BR175`: Practice session initialization (MSG129).
+    *   `BR176`: License validation check for sa-hinh practice (MSG130).
+    *   `BR177`: WebGL/canvas capabilities compatibility check (MSG131).
+    *   `BR178`: Real-time processing of driving telemetry.
+    *   `BR179`: Persistence of session summary, error events, and audit logs.
+    *   `BR180`: Return summary and final feedback payload (MSG134).
+*   **Liên kết ASR:** ASR-UX-02 (Live error feedback returned in response), ASR-MOD-03 (Scenarios loaded dynamically)
+*   **Liên kết ADD:** Section 3.2.8, Table 39
+*   **Liên kết SAD:** §3.2.8 (simulation-service)
+*   **Tham chiếu Codebase:**
+    *   Controller: [simulation.controller.ts](../../apps/simulation-service/src/presentation/http/simulation.controller.ts) (POST `/practice2d/sessions`, `/practice2d/sessions/:id/end`)
+    *   UseCase: [start-practice2d-session.use-case.ts](../../apps/simulation-service/src/application/use-cases/practice2d/start-practice2d-session.use-case.ts), [end-practice2d-session.use-case.ts](../../apps/simulation-service/src/application/use-cases/practice2d/end-practice2d-session.use-case.ts)
+    *   Aggregate: [practice2d-session.aggregate.ts](../../apps/simulation-service/src/domain/aggregates/practice2d/practice2d-session.aggregate.ts)
+
+#### UC36: Error Feedback Within Session (Phản hồi lỗi sa hình thời gian thực)
+*   **Dịch vụ:** `simulation-service`
+*   **Tác nhân (Actor):** Học viên (Student)
+*   **Kích hoạt (Trigger):** Hệ thống nhận gói tin telemetry của học sinh gửi từ client lên.
+*   **Luồng Hoạt Động (Flow):**
+    1. Kiểm tra JWT token (BR174).
+    2. Đọc gói tin telemetry nhận được chứa các chỉ số di chuyển: `speedKmh`, `laneOffset`, `collision` (BR178).
+    3. Đánh giá vi phạm dựa trên Server-Side FSM (Máy trạng thái hữu hạn chạy trên server):
+        *   Nếu `collision = true` (đâm đụng): Sinh lỗi `COLLISION`, mức độ nghiêm trọng `FATAL`, phạt 100 điểm, tự động kết thúc phiên thi ngay lập tức.
+        *   Nếu `speedKmh > 60` (quá tốc độ): Sinh lỗi `OVERSPEED`, mức độ nghiêm trọng `WARNING`, phạt 10 điểm.
+        *   Nếu `laneOffset > 1` (lấn làn): Sinh lỗi `LANE_DEPARTURE`, mức độ nghiêm trọng `WARNING`, phạt 5 điểm.
+    4. Trả kết quả feedback chứa mã lỗi và hình thức phạt về cho client lập tức (<300ms) để hiển thị cảnh báo cho học viên (BR180 - ASR-UX-02).
+*   **Quy tắc Nghiệp vụ (Key Business Rules):**
+    *   `BR178`: Telemetry packet parsing (speed, lane departure, collision events).
+    *   `BR180`: FSM assessment, automatic score reduction, and immediate warning feedback dispatch (<300ms).
+*   **Liên kết ASR:** ASR-UX-02 (Telemetry response within 300ms for alerts), ASR-MOD-03 (Telemetry checks server-side only to prevent cheating)
+*   **Liên kết ADD:** Table 39, Table 37, Scenario 2, Flow 4
+*   **Liên kết SAD:** §3.2.8, §5.1.8
+*   **Tham chiếu Codebase:**
+    *   Controller: [simulation.controller.ts](../../apps/simulation-service/src/presentation/http/simulation.controller.ts) (POST `/practice2d/sessions/:id/telemetry`)
+    *   UseCase: [ingest-practice2d-telemetry.use-case.ts](../../apps/simulation-service/src/application/use-cases/practice2d/ingest-practice2d-telemetry.use-case.ts)
+    *   Aggregate: [practice2d-session.aggregate.ts](../../apps/simulation-service/src/domain/aggregates/practice2d/practice2d-session.aggregate.ts) (phương thức `ingestTelemetry` và `detectFeedback`)
+
+## 🗺️ 5. Cross-Reference: SRS ➔ ASR ➔ ADD ➔ SAD
+
+Bảng đối chiếu hoàn chỉnh chuỗi truy xuất từ **Use Case (SRS)** → **Yêu cầu kiến trúc (ASR)** → **Quyết định thiết kế (ADD)** → **Tài liệu kiến trúc phần mềm (SAD)**.
+
+> SAD §x.y là vị trí trong `context/SAD.docx` mô tả cách yêu cầu đó được kiến trúc hóa.
+
+### 🔐 Nhóm Bảo Mật
+
+| SRS Use Case | ASR ID | ADD Section | Design Pattern | SAD Section |
+|---|---|---|---|---|
+| UC01: Login | ASR-SEC-01 | Table 1, 7; Flow 1 | Chain of Responsibility (Guards), Token Blacklist | §5.2.1 (Login Flow), §6.3.1 (Authentication) |
+| UC02: Forgot Password | ASR-SEC-02 | Table 2 | Delegation to Keycloak | §6.3.1 (Password Reset via Keycloak) |
+| UC03: Create User | ASR-SEC-04 | Table 4 | Decorator (DTO validation), RBAC | §6.3.2 (Authorization / RBAC) |
+| UC05: Lock/Unlock User | ASR-SEC-01 | Table 1 | Keycloak setEnabled, Outbox | §6.3.1, §3.2.1 (identity-service) |
+| UC33: Logout | ASR-SEC-03 | Table 3; ADD 3.4 | Token Blacklist (Redis), Chain of Responsibility | §6.3.1 (Token Blacklist), §3.2.1 |
+
+### 📚 Nhóm Khóa Học
+
+| SRS Use Case | ASR ID | ADD Section | Design Pattern | SAD Section |
+|---|---|---|---|---|
+| UC07: View Course | ASR-PERF-05 | Table 12 | Strategy (CourseCachePort), Cache-Aside | §5.2.5 (Course Detail Cache Flow), §3.2.6 (course-service) |
+| UC08/09: Create/Update Course | ASR-DI-06, PERF-05 | Table 29, 12 | Partial Update, Cache Invalidation | §3.2.6 (course-service), §5.2.5 |
+| UC10: Delete Course | ASR-DI-10 | Table 32 | Soft-Delete, Guard Clause | §4.3 (Design Principles: Soft-Delete), §3.2.6 |
+
+### 📝 Nhóm Thi Lý Thuyết
+
+| SRS Use Case | ASR ID | ADD Section | Design Pattern | SAD Section |
+|---|---|---|---|---|
+| UC11: Start Exam | ASR-PERF-12, DI-08, DI-09, REL-02 | Table 10, 31, 34 | Factory Method, Config Snapshot | §5.2.2 (Exam Submission Flow), §3.2.5 (exam-service) |
+| UC12: Auto-Save | ASR-REL-03, UX-05 | Table 21, 40 | Idempotent Write (Upsert) | §5.2.2, §4.3 (Idempotent Write) |
+| UC13/14: Submit & Grade | ASR-REL-04, DI-01, DI-02, DI-07 | Table 23, 25, Scenario 1 | Observer (Domain Events), Transactional Outbox | §5.2.2 (Submit & Grade), §6.3.3 (Answer Confidentiality) |
+| UC15: View Result | ASR-REL-07, SEC-05 | Table 24, 5 | Mapper (strip correctOptionId) | §6.3.3 (Answer Confidentiality), §3.2.5 |
+
+### 📊 Nhóm Analytics & Tiến Trình
+
+| SRS Use Case | ASR ID | ADD Section | Design Pattern | SAD Section |
+|---|---|---|---|---|
+| UC26/34: Progress Dashboard | ASR-PERF-04, PERF-07 | Table 11, 13 | CQRS, Pub-Sub | §5.2.3 (Progress Dashboard Read Flow), §3.2.9 (analytics-service) |
+| UC19: Reset Progress | ASR-REL-05 | Table 22 | Soft Reset, Pub-Sub | §3.2.9, §5.2.3 |
+| UC32: Missed Questions | ASR-PERF-09, DI-07 | Table 15, 30 | Spaced Repetition, Transactional Outbox | §3.2.9, §5.2.2 |
+
+### 🚗 Nhóm Thực Hành Lái Xe
+
+| SRS Use Case | ASR ID | ADD Section | Design Pattern | SAD Section |
+|---|---|---|---|---|
+| Practice 2D Simulation | ASR-UX-02, MOD-03 | Table 39, 37, Scenario 2 | FSM (Server-Side), Observer | §3.2.8 (simulation-service), §5.1.8 |
+
+### 🏥 Nhóm System-Level
+
+| Concern | ASR ID | ADD Section | Design Pattern | SAD Section |
+|---|---|---|---|---|
+| HTTP Resilience | ASR-AV-04 | Table 45 | Circuit Breaker, Retry + Backoff, Timeout | §4.1 (AD-004 Resilient HTTP), §4.3 (Design for Failure) |
+| MQ Resilience | ASR-AV-05, REL-03 | Table 46 | RabbitMqRetryInterceptor, DLQ | §4.1 (AD-006 Outbox), §5.2.4 (Async Notification Flow) |
+| Observability | ASR-AV-03 | Table 44 | Metrics, AccessLog, CorrelationId Interceptors | §4.2 (Availability Implementation), §7.1 |
+| Config Management | ASR-MOD-01 | ADD 3.1 | Config Priority Chain, ConsulConfigFactory | §3.1 (Infrastructure Layer), §4.3 |
+| Audit Logging | ASR-DI-05 | ADD 3.4 | Factory (createAuditEvent), audit-service | §3.2.13 (audit-service — see note) |
+| Data Backup | ASR-AV-07 | — | pg_dump scripts | §4.2 (Backup & Restore constraint) |
+
+> ⚠️ **Lưu ý:** `audit-service` (§3.2.13) hiện diện đầy đủ trong codebase nhưng chưa được ghi trong SAD §3.2. Đây là gap tài liệu, không phải gap implementation.
+
+---
+
+## ✅ 6. ASR Constraint Compliance Audit — Codebase vs ASR.xlsx
+
+Kiểm tra từng **Constraint** trong cột "Constraints" của `ASR.xlsx` đối chiếu với source code hiện tại. Mỗi mục đều được xác minh bằng cách đọc trực tiếp code.
+
+### Kết Quả Tổng Quan
+
+> 🛠️ **Cập nhật 2026-05-31:** Tất cả gaps đã được xử lý. ASR.xlsx đã được cập nhật cho PERF-05 và PERF-02b. Schema + migration được tạo cho PERF-02a và PERF-11.
+
+| Trạng thái | Số lượng ASR | Ghi chú |
+|---|---|---|
+| ✅ Đã implement đầy đủ | 47 / 48 | PERF-05 ASR updated; PERF-02 + PERF-11 indexes added |
+| 🔵 Client-side (ngoài backend scope) | 5 ASRs | REL-01, REL-06, UX-01, UX-04, UX-05 |
+| ⏳ Known limitation (deferred) | 1 | PERF-02b: cursor pagination — noted in ASR, sufficient for 10k scale |
+
+---
+
+### 🔐 Security Constraints
+
+| ASR | Constraint | Codebase Status | Evidence |
+|---|---|---|---|
+| ASR-SEC-01 | Auth service independently scalable; passwords hashed one-way | ✅ | Keycloak handles hashing; identity-service stateless, scales independently |
+| ASR-SEC-02 | Reset token expires 15 min, single-use; no background cleanup | ✅ | Delegated to Keycloak built-in lifecycle management |
+| ASR-SEC-03 | Logout writes JWT jti to Redis blacklist (TTL = remaining lifetime); TokenBlacklistGuard on every auth | ✅ | [token-blacklist.guard.ts](../../apps/identity-service/src/infrastructure/guards/token-blacklist.guard.ts) |
+| ASR-SEC-04 | RBAC rules centralized; no individual service implements own access-control | ✅ | Kong RBAC + NestJS Guards (AuthGuard → TokenBlacklistGuard → RoleGuard chain) |
+| ASR-SEC-05 | Server-side response serialiser excludes correct answer before transmission | ✅ | [exam-session.mapper.ts](../../apps/exam-service/src/infrastructure/persistence/mappers/exam-session.mapper.ts) — correctOptionId/isCritical stay in domain, excluded from DTO |
+| ASR-SEC-06 | Physical deletion of questions in exam history prohibited; soft-delete only | ✅ | [prisma-question.repository.ts](../../apps/question-service/src/infrastructure/persistence/prisma/prisma-question.repository.ts) — no hard delete; isDeleted=true |
+
+---
+
+### ⚡ Performance Constraints
+
+| ASR | Constraint | Codebase Status | Evidence / Gap |
+|---|---|---|---|
+| ASR-PERF-01 | Auth service independently scalable; infrastructure sized for P95 ≤ 300ms | ✅ | identity-service is a separate stateless NestJS container |
+| ASR-PERF-02 | pg_trgm GIN indexes on (fullName, email, phoneNumber); offset pagination noted in ASR | ✅ **FIXED** | Three separate GIN trgm indexes added to schema + migration `20260531090000_add_trgm_search_indexes`. Cursor pagination explicitly deferred in updated ASR constraint. |
+| ASR-PERF-03 | Pagination mandatory; unbounded exam history queries not permitted | ✅ | `ListExamSessionsFilter` requires `page`/`size`; `findAll()` applies `skip`/`take` |
+| ASR-PERF-04 | Stats pre-computed in `progress_stat` table; no Redis; no real-time aggregation | ✅ | analytics-service writes to `ProgressStat` table on event; `get-progress.use-case.ts` reads from aggregation |
+| ASR-PERF-05 | Redis (ioredis) TTL 600s, shared cross-instance; safeExec fallback to DB | ✅ **FIXED** | ASR.xlsx constraint updated to reflect Redis implementation. `redis-course-cache.service.ts` — pattern invalidation + safeExec fallback. |
+| ASR-PERF-07 | Chart data from periodically updated aggregation table; no Redis; no real-time | ✅ | Same as PERF-04 — `analytics_db.ProgressStat` table used |
+| ASR-PERF-08 | Async via RabbitMQ; durable queue; return HTTP 202 | ✅ | notification-service consumers from durable queue; publishers return HTTP 202 immediately |
+| ASR-PERF-09 | SRS algorithm against bounded recent records, not full-history | ✅ | `list-missed-questions` limits to `Math.min(query.limit, 50)` + `periodDays` bounds |
+| ASR-PERF-10 | Exam history indexed on (studentId, date, result); unbounded queries not permitted | ✅ | exam-service schema: `@@index([studentId, status])`, `@@index([studentId, startedAt])`, `@@index([studentId, isPassed, startedAt])` |
+| ASR-PERF-11 | pg_trgm GIN index on `content` column; ILIKE queries use index automatically | ✅ **FIXED** | `@@index([content(ops: raw("gin_trgm_ops"))], type: Gin)` added to question schema + migration `20260531090000_add_content_trgm_index`. No application code change needed. |
+| ASR-PERF-12 | Question selection via indexed queries; no full-table scan | ✅ | exam-service schema: `@@index([licenseCategory, isActive, isDeleted])`; `getPool()` applies `where: { licenseCategories: { has }, topicId, isActive, isDeleted }` |
+
+---
+
+### 🔄 Reliability Constraints
+
+| ASR | Constraint | Codebase Status | Evidence |
+|---|---|---|---|
+| ASR-REL-01 | Flag states persisted to device storage within 10ms | 🔵 Client-side | React Native `AsyncStorage` — outside backend scope |
+| ASR-REL-02 | Server records start time; validates elapsed on submission; beyond-deadline answers discarded | ✅ | `ExamSession.create()` sets `expiresAt` server-side; `finalize-expired-session` checks expiry |
+| ASR-REL-03 | Auto-save idempotent; only changed answers transmitted | ✅ | `save-answer.use-case.ts` handles single answer per call (incremental); `sessionRepository.save()` is a full upsert — idempotent on same answer |
+| ASR-REL-04 | Submission + grading + result write in single DB transaction; failure rolls back | ✅ | `submit-session.use-case.ts` + `prisma.$transaction()` wraps all writes |
+| ASR-REL-05 | Reset never physically deletes exam records; analytics reset async via event | ✅ | `reset-enrollment-progress` publishes event; analytics-service handles `course.enrollment.progress-reset` |
+| ASR-REL-06 | Client auto-submits when local timer expires | 🔵 Client-side | React Native timer → calls submit API |
+| ASR-REL-07 | Result queries use indexed lookups; full-table scans not permitted | ✅ | `findById` uses primary key lookup; `findAll` uses indexed filters |
+
+---
+
+### 🗄️ Data Integrity Constraints
+
+| ASR | Constraint | Codebase Status | Evidence |
+|---|---|---|---|
+| ASR-DI-01 | Client submits answer selections only; all scoring server-side; result immutable | ✅ | `ExamSession.grade()` in domain; no update/delete on COMPLETED session |
+| ASR-DI-02 | Fatal-question list loaded at grading time; never exposed to client | ✅ | `isCritical` in domain aggregate only; excluded from all response DTOs |
+| ASR-DI-03 | Questions soft-deleted only; physical deletion prohibited once used in exam | ✅ | `isDeleted=true` flag only; `save()` upserts, never deletes |
+| ASR-DI-04 | Exam config validated server-side; mismatched topic question count rejected | ✅ | `ExamTemplate.validate()` [L231-257](../../apps/exam-service/src/domain/aggregates/exam-template/exam-template.aggregate.ts#L231-L257): `sum(topicDistribution.questionCount) must === totalQuestions` |
+| ASR-DI-05 | License tier switch atomic; previous deactivated before new activated | ✅ | `assign-license-tier.use-case.ts` in single Prisma transaction with audit event |
+| ASR-DI-06 | Partial field updates validated independently before persisting | ✅ | `update-course.use-case.ts` validates each submitted field individually |
+| ASR-DI-07 | ExamCompleted event written to outbox in same transaction as COMPLETED ExamSession | ✅ | `submit-session.use-case.ts` → `PrismaExamSessionRepository.save()` → single `$transaction([insertSession, insertOutbox])` |
+| ASR-DI-08 | Exam config snapshotted at generation time; cannot be altered after creation | ✅ | `topicDistributionSnapshot`, `passingScoreSnapshot`, `durationMinutesSnapshot` JSONB columns in exam_db |
+| ASR-DI-09 | Exact question count per topic; generation fails if insufficient pool | ✅ | `start-session.use-case.ts` [L142-147](../../apps/exam-service/src/application/use-cases/start-session/start-session.use-case.ts#L142-L147): throws `InsufficientQuestionPoolException` if topic pool < required count |
+| ASR-DI-10 | Course-service guard checks enrolment before DELETE; no cross-service cascade | ✅ | `delete-course.use-case.ts`: `countEnrollments()` guard before `archive()` |
+
+---
+
+### 🔧 Modifiability Constraints
+
+| ASR | Constraint | Codebase Status | Evidence |
+|---|---|---|---|
+| ASR-MOD-01 | All exam rules stored as data; no hardcoded exam logic; changes take effect immediately | ✅ | Exam rules in `ExamTemplate` DB records read at runtime; Consul KV for service config |
+| ASR-MOD-02 | License tiers modelled as config data; no tier IDs hardcoded in logic | ✅ | `LicenseTier` enum for type-safety, but values driven from DB `StudentDetail.licenseTier`; no if/else on hardcoded tier strings |
+| ASR-MOD-03 | Map renderer reads config from file at runtime; no map-specific logic hardcoded | ✅ | simulation-service loads road-map scenarios from Azure Blob Storage at runtime |
+
+---
+
+### 🎨 UX / Usability Constraints
+
+| ASR | Constraint | Codebase Status | Evidence |
+|---|---|---|---|
+| ASR-UX-01 | Answer highlight colors in design system tokens; consistent across themes | 🔵 Client-side | React Native design system — outside backend scope |
+| ASR-UX-02 | Error feedback determined server-side; returned in action response; client renders within 300ms | ✅ | `Practice2dSession.ingestTelemetry()` FSM computes feedback; WebSocket returns `{ errorCode, severity, penalty }` immediately |
+| ASR-UX-04 | Answer selections held in memory indexed by question; navigation never resets | 🔵 Client-side | React Native state management |
+| ASR-UX-05 | App detects network loss; non-blocking offline indicator within 2s | 🔵 Client-side | React Native network listener |
+
+---
+
+### 🏥 Availability Constraints
+
+| ASR | Constraint | Codebase Status | Evidence |
+|---|---|---|---|
+| ASR-AV-01 | All NestJS services implement `/health/live` and `/health/ready` via shared HealthModule | ✅ | `HealthModule.register()` in every `app.module.ts`; verified by smoke test output |
+| ASR-AV-02 | docker-compose uses `healthcheck` pointing to `/health/ready` and `restart: unless-stopped` | ✅ | `docker-compose.yaml` L286, L323, ...; `docker-compose.deploy.yml` all services |
+| ASR-AV-03 | GET `/metrics` endpoint via shared MetricsModule; smoke.ts propagates `x-correlation-id` | ✅ | `MetricsModule.register()` in all services; `observability-smoke.ts` in scripts/ |
+| ASR-AV-04 | Shared resilient HTTP client; fail within configured timeout; retry transient failures | ✅ | `resilientFetch()` in `@repo/common` with circuit breaker, exponential backoff, timeout |
+| ASR-AV-05 | Producer services write business change + outbox message in same PostgreSQL transaction | ✅ | user-service, course-service, exam-service all use `$transaction([saveEntity, insertOutbox])` |
+| ASR-AV-06 | Selected services use NestJS in-memory CacheManager or pre-aggregated tables for partial degradation | ⚠️ **DEVIATION** | course-service uses Redis (same as PERF-05 deviation); analytics-service uses pre-aggregated table (correct) |
+| ASR-AV-07 | pg_dump backup scripts and restore runbook in repository | ✅ | `scripts/db-backup-local.ts`, `scripts/db-restore-test.ts` |
+
+---
+
+### ✅ Trạng Thái Sau Khi Xử Lý Các Gaps (2026-05-31)
+
+#### Gap 1 ✅ — ASR-PERF-05 / ASR-AV-06: Course Cache dùng Redis (ASR đã cập nhật)
+
+**Trạng thái:** ✅ **Resolved — ASR.xlsx constraint đã được cập nhật**
+
+**Constraint cũ:** "NestJS in-memory CacheManager... No shared Redis cache."
+
+**Constraint mới (đã cập nhật trong ASR.xlsx):**
+> "Course content is cached using Redis (ioredis) with a TTL of 600 seconds, shared across all service instances. Redis provides cross-instance consistency, pattern-based invalidation, and survives service restarts. CourseCachePort keeps the implementation swappable. If Redis is unavailable, safeExec() falls back to DB query."
+
+**Không cần sửa code** — Redis tốt hơn in-memory ở mọi khía cạnh khi deploy multi-replica.
+
+---
+
+#### Gap 2 ✅ — ASR-PERF-02: pg_trgm GIN Indexes đã thêm; Cursor Pagination ghi nhận trong ASR
+
+**Trạng thái:** ✅ **Partially resolved — Index fixed; Pagination deferred và ghi trong ASR**
+
+**2a — Composite/trgm index:** ✅ **FIXED**
+
+Đã thêm 3 GIN trigram indexes vào [user-service/prisma/schema.prisma](../../apps/user-service/prisma/schema.prisma):
+```prisma
+@@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_user_profiles_fullname_trgm")
+@@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_user_profiles_email_trgm")
+@@index([phoneNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_user_profiles_phone_trgm")
+```
+
+Migration: [20260531090000_add_trgm_search_indexes/migration.sql](../../apps/user-service/prisma/migrations/20260531090000_add_trgm_search_indexes/migration.sql)
+
+Khi infra chạy, áp dụng:
+```bash
+npx tsx scripts/prisma-migrate-all.ts deploy
+```
+
+**2b — Cursor-based pagination:** ⏳ **Deferred — ghi nhận trong ASR**
+
+ASR-PERF-02 đã được cập nhật trong `ASR.xlsx` để ghi nhận rằng offset pagination là phù hợp ở scale 10k records với indexes mới. Cursor pagination là future enhancement khi scale > 100k.
+
+---
+
+#### Gap 3 ✅ — ASR-PERF-11: pg_trgm GIN Index trên question content đã thêm
+
+**Trạng thái:** ✅ **FIXED — Schema + migration đã tạo, không cần sửa application code**
+
+Đã thêm GIN trigram index vào [question-service/prisma/schema.prisma](../../apps/question-service/prisma/schema.prisma):
+```prisma
+// ASR-PERF-11: pg_trgm GIN index enables fast ILIKE keyword search on content
+@@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_questions_content_trgm")
+```
+
+Migration: [20260531090000_add_content_trgm_index/migration.sql](../../apps/question-service/prisma/migrations/20260531090000_add_content_trgm_index/migration.sql)
+
+Prisma's `content: { contains: keyword, mode: 'insensitive' }` **tự động sử dụng GIN trgm index** sau khi áp dụng migration — không cần thay đổi query code.
+
+**Cả 2 migration đều bao gồm:**
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- Enable pg_trgm
+CREATE INDEX "idx_..." ON "..." USING GIN ("..." gin_trgm_ops);
+```
+
+---
+
+> **Lưu ý về các ASR client-side (REL-01, REL-06, UX-01, UX-04, UX-05):** Các constraint này thuộc về React Native frontend, không thuộc phạm vi kiểm tra backend codebase. Cần verify riêng bên `apps/mobile/` khi có.
+
