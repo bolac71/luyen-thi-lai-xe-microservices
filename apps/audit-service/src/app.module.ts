@@ -6,6 +6,8 @@ import {
   ConsulConfigFactory,
   HealthModule,
   MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
 } from '@repo/common';
 import Joi from 'joi';
 import {
@@ -84,6 +86,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [AuditLogController, MessagingController],
   providers: [
@@ -93,6 +96,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     ListAuditLogsUseCase,
     GetAuditLogUseCase,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

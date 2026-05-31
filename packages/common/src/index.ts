@@ -39,3 +39,8 @@ export * from './tracing';
 // ============== SWAGGER =========================
 export * from './config/cors.setup';
 export * from './config/swagger.setup';
+
+// ============== AUTH ============================
+export * from './auth/token-blacklist.service';
+export * from './auth/token-blacklist.guard';
+export * from './auth/token-blacklist.module';

@@ -74,11 +74,13 @@ export class PrismaCourseEnrollmentRepository extends CourseEnrollmentRepository
           progress: enrollment.progress,
           enrolledAt: enrollment.enrolledAt,
           completedAt: enrollment.completedAt,
+          lastResetAt: enrollment.lastResetAt,
         },
         update: {
           status: enrollment.status,
           progress: enrollment.progress,
           completedAt: enrollment.completedAt,
+          lastResetAt: enrollment.lastResetAt,
         },
       });
 

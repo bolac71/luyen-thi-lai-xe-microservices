@@ -243,6 +243,8 @@ Demo accounts được seed vào Keycloak và các service DB dùng chung passwo
   - Target hiện tại là GCP/GKE, self-contained dependencies trong cluster cho giai đoạn MVP.
   - GCP/GKE chỉ pull image từ GHCR theo tag được truyền vào Helm; không build source code trên GCP.
   - K3s/VPS chỉ còn là hướng lab hoặc fallback legacy, không phải target production chính.
+  - Hướng dẫn setup nằm ở `guides/devops/PHASE5-KUBERNETES.md`.
+- Health endpoints chuẩn: `/health`, `/health/live`, `/health/ready` (Xem đặc tả tại [api-spec-health-metrics.md](./guides/api/api-spec-health-metrics.md))
   - Hướng dẫn setup nằm ở `guides/devops/KUBERNETES-GCP-DEPLOYMENT.md`.
   - Checklist GCP chi tiết nằm ở `guides/devops/GCP-SETUP.md`.
   - Kịch bản demo DevOps nằm ở `guides/devops/DEVOPS-DEMO-SCRIPT.md`.

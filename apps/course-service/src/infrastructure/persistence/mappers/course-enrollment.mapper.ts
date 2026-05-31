@@ -9,6 +9,7 @@ export interface RawCourseEnrollmentRow {
   progress: number;
   enrolledAt: Date;
   completedAt: Date | null;
+  lastResetAt: Date | null;
 }
 
 export const CourseEnrollmentMapper = {
@@ -21,6 +22,7 @@ export const CourseEnrollmentMapper = {
       progress: raw.progress,
       enrolledAt: raw.enrolledAt,
       completedAt: raw.completedAt,
+      lastResetAt: raw.lastResetAt,
     });
   },
 };

@@ -31,6 +31,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
       COURSE_CODE_ALREADY_EXISTS: HttpStatus.CONFLICT,
       COURSE_VERSION_CONFLICT: HttpStatus.CONFLICT,
       COURSE_HAS_ACTIVE_ENROLLMENTS: HttpStatus.CONFLICT,
+      ENROLLMENT_RESET_COOLDOWN: HttpStatus.BAD_REQUEST,
     };
 
     const status = statusMap[exception.code] ?? HttpStatus.BAD_REQUEST;

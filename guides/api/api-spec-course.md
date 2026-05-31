@@ -34,7 +34,7 @@ Course-service validate JWT/RBAC tại service bằng Keycloak guard. Frontend g
 | `GET /enrollments` | `STUDENT` |
 | `GET /enrollments/:id` | `STUDENT`, `ADMIN`, `CENTER_MANAGER` |
 | `POST /enrollments/:id/lessons/:lessonId/complete` | `STUDENT` |
-| `POST /enrollments/:id/reset-progress` | `STUDENT`, owner only |
+| `POST /enrollments/:id/reset-progress` | `STUDENT` (owner), `ADMIN`, `CENTER_MANAGER` |
 
 ---
 
@@ -914,7 +914,7 @@ Same `Course` shape as `GET /admin/courses/:id`, with `status = "ARCHIVED"`.
 
 ### POST `/enrollments/{id}/reset-progress`
 
-Role: `STUDENT`.
+Role: `STUDENT`, `ADMIN`, `CENTER_MANAGER`.
 
 Resets only the current student's enrollment progress to baseline:
 

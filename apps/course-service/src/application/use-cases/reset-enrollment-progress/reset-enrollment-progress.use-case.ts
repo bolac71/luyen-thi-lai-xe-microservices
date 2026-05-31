@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createAuditEvent, IUseCase } from '@repo/common';
 import { EnrollmentNotFoundException } from '../../../domain/exceptions/enrollment-not-found.exception';
 import { EnrollmentUnauthorizedException } from '../../../domain/exceptions/enrollment-unauthorized.exception';
+import { EnrollmentResetCooldownException } from '../../../domain/exceptions/enrollment-reset-cooldown.exception';
 import { CourseEnrollmentRepository } from '../../../domain/repositories/course-enrollment.repository';
 import { EventPublisher } from '../../ports/event-publisher.port';
 import { EnrollmentResult } from '../shared/enrollment.result';
@@ -24,8 +25,29 @@ export class ResetEnrollmentProgressUseCase
     );
     if (!enrollment)
       throw new EnrollmentNotFoundException(command.enrollmentId);
-    if (enrollment.studentId !== command.studentId) {
+
+    const actorRole = command.auditContext?.actorRole ?? '';
+    const isStaff =
+      actorRole === 'ADMIN' ||
+      actorRole === 'CENTER_MANAGER' ||
+      actorRole === 'realm:ADMIN' ||
+      actorRole === 'realm:CENTER_MANAGER';
+
+    if (!isStaff && enrollment.studentId !== command.studentId) {
       throw new EnrollmentUnauthorizedException(command.enrollmentId);
+    }
+
+    if (!isStaff && enrollment.lastResetAt) {
+      const cooldownMs = 24 * 60 * 60 * 1000;
+      const timeSinceLastReset = Date.now() - enrollment.lastResetAt.getTime();
+      if (timeSinceLastReset < cooldownMs) {
+        const hoursRemaining =
+          (cooldownMs - timeSinceLastReset) / (60 * 60 * 1000);
+        throw new EnrollmentResetCooldownException(
+          enrollment.id,
+          hoursRemaining,
+        );
+      }
     }
 
     enrollment.resetProgress();

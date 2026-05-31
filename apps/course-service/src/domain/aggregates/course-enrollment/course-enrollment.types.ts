@@ -17,4 +17,5 @@ export interface ReconstituteEnrollmentProps {
   progress: number;
   enrolledAt: Date;
   completedAt: Date | null;
+  lastResetAt: Date | null;
 }
