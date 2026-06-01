@@ -803,9 +803,14 @@ Mở file:
 Lệnh demo nếu có cluster:
 
 ```bash
-helm history luyen-thi-lai-xe -n staging
-helm rollback luyen-thi-lai-xe <revision> -n staging
-SMOKE_BASE_URL=https://api.staging.example.com bash scripts/k8s-smoke.sh
+npm run keycloak:backup:once
+```
+
+File/thư mục cần chỉ khi quay:
+
+```text
+backups/keycloak/<env>/<timestamp>/
+backups/keycloak/weekly/<env>/<yyyy-Www>/
 ```
 
 Lời thoại gợi ý:
