@@ -1,18 +1,17 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-import { NestFactory, Reflector } from '@nestjs/core';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
-import { Logger } from '@nestjs/common';
+import { NestFactory, Reflector } from '@nestjs/core';
 import {
+  AccessLogInterceptor,
   ApiExceptionFilter,
   ApiResponseInterceptor,
-  AccessLogInterceptor,
   assertRabbitMqResilienceTopology,
-  createRabbitMqConsumerOptions,
   CorrelationIdInterceptor,
   CorrelationIdMiddleware,
+  createRabbitMqConsumerOptions,
   getRabbitMqUrl,
   installLocalDevTransientErrorGuard,
   MetricsService,
@@ -34,14 +33,18 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
   const configService = app.get(ConfigService);
   const rabbitmqUrl = getRabbitMqUrl(configService);
   const rabbitmqQueue = 'notification_service_events';
+  const retryDelaysMs = createRetryDelays(configService);
   await assertRabbitMqResilienceTopology(rabbitmqUrl, {
     queue: rabbitmqQueue,
+    retryDelaysMs,
   });
   const port = configService.get<number>('port') ?? 3000;
 
+  app.enableCors();
   app.use(new CorrelationIdMiddleware().use);
   app.use(new TracingMiddleware(serviceName).use);
   app.useGlobalInterceptors(
@@ -53,21 +56,27 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalFilters(new ApiExceptionFilter());
 
-  // Cấu hình Swagger
   setupMicroserviceSwagger(app, {
     title: 'Notification Service API',
-    description: 'Quản lý thông báo và cập nhật trạng thái thi cho người dùng',
+    description:
+      'Dịch vụ gửi thông báo bất đồng bộ (in-app, email qua SMTP/Mailpit, push qua FCM) và tiêu thụ event RabbitMQ với retry/DLQ.',
   });
 
   app
     .connectMicroservice(
-      createRabbitMqConsumerOptions({ url: rabbitmqUrl, queue: rabbitmqQueue }),
+      createRabbitMqConsumerOptions({
+        url: rabbitmqUrl,
+        queue: rabbitmqQueue,
+      }),
     )
     .useGlobalInterceptors(
       new CorrelationIdInterceptor(),
       new TracingInterceptor(serviceName),
       new RabbitMqRetryInterceptor(
-        { queue: rabbitmqQueue },
+        {
+          queue: rabbitmqQueue,
+          retryDelaysMs,
+        },
         app.get(MetricsService),
       ),
     );
@@ -77,3 +86,16 @@ async function bootstrap() {
   logger.log(`Notification Service listening on port ${port}`);
 }
 void runBootstrapWithRetries(serviceName, bootstrap);
+
+function createRetryDelays(configService: ConfigService): number[] {
+  const maxAttempts = Math.max(
+    1,
+    configService.get<number>('retry.maxAttempts') ?? 3,
+  );
+  const intervalMs = Math.max(
+    1000,
+    configService.get<number>('retry.intervalMs') ?? 300000,
+  );
+
+  return Array.from({ length: maxAttempts }, () => intervalMs);
+}

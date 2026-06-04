@@ -8,9 +8,11 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
-import { NotificationType } from '@prisma/notification-client';
+import {
+  NotificationStatus,
+  NotificationType,
+} from '@prisma/notification-client';
 import { NotificationRecord } from '../../domain/repositories/notification.repository';
-import { AcademicWarningDispatchResult } from '../../application/use-cases/notification.use-cases';
 
 export class SendAcademicWarningRequestDto {
   @ApiPropertyOptional({
@@ -22,7 +24,7 @@ export class SendAcademicWarningRequestDto {
 
   @ApiPropertyOptional({
     type: [String],
-    description: 'Batch recipient ids for SRS UC29 selected-student flow.',
+    description: 'Batch recipient ids for selected-student flow.',
   })
   @IsOptional()
   @IsArray()
@@ -34,7 +36,8 @@ export class SendAcademicWarningRequestDto {
     enum: NotificationType,
     isArray: true,
     default: [NotificationType.IN_APP],
-    description: 'Delivery channels. Current implementation supports IN_APP.',
+    description:
+      'Requested delivery channels. Admin API queues IN_APP warnings; EMAIL/PUSH are driven by event payload and service config.',
   })
   @IsOptional()
   @IsArray()
@@ -58,6 +61,23 @@ export class SendAcademicWarningRequestDto {
   message!: string;
 }
 
+export class AcademicWarningAcceptedResponseDto {
+  @ApiProperty({ example: 'ACCEPTED' })
+  status!: string;
+
+  @ApiProperty()
+  accepted!: number;
+
+  @ApiProperty({ type: [String] })
+  studentIds!: string[];
+
+  @ApiProperty({
+    description:
+      'Warnings were queued through RabbitMQ for asynchronous notification delivery.',
+  })
+  message!: string;
+}
+
 export class ListNotificationsQueryDto {
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
@@ -72,48 +92,22 @@ export class NotificationResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() userId!: string;
   @ApiProperty({ enum: NotificationType }) type!: NotificationType;
+  @ApiProperty({ nullable: true }) eventType!: string | null;
   @ApiProperty() title!: string;
   @ApiProperty() body!: string;
   @ApiProperty() data!: unknown;
+  @ApiProperty({ enum: NotificationStatus }) status!: NotificationStatus;
+  @ApiProperty() retryCount!: number;
+  @ApiProperty({ nullable: true }) errorMessage!: string | null;
   @ApiProperty() isRead!: boolean;
   @ApiProperty({ nullable: true }) readAt!: Date | null;
   @ApiProperty({ nullable: true }) sentAt!: Date | null;
+  @ApiProperty({ nullable: true }) deliveredAt!: Date | null;
   @ApiProperty() createdAt!: Date;
+  @ApiProperty() updatedAt!: Date;
 
   static fromRecord(record: NotificationRecord): NotificationResponseDto {
     return Object.assign(new NotificationResponseDto(), record);
-  }
-}
-
-export class AcademicWarningDispatchResponseDto {
-  @ApiProperty() warningId!: string;
-  @ApiProperty({ type: [String] }) warningIds!: string[];
-  @ApiProperty({ nullable: true, type: NotificationResponseDto })
-  notification!: NotificationResponseDto | null;
-  @ApiProperty({ type: [NotificationResponseDto] })
-  notifications!: NotificationResponseDto[];
-  @ApiProperty() deliveryStatus!: string;
-  @ApiProperty() persisted!: number;
-  @ApiProperty() queued!: number;
-  @ApiProperty() pendingRetry!: number;
-
-  static fromResult(
-    result: AcademicWarningDispatchResult,
-  ): AcademicWarningDispatchResponseDto {
-    const dto = new AcademicWarningDispatchResponseDto();
-    dto.warningId = result.warningId;
-    dto.warningIds = result.warningIds;
-    dto.notification = result.notification
-      ? NotificationResponseDto.fromRecord(result.notification)
-      : null;
-    dto.notifications = result.notifications.map(
-      NotificationResponseDto.fromRecord,
-    );
-    dto.deliveryStatus = result.deliveryStatus;
-    dto.persisted = result.persisted;
-    dto.queued = result.queued;
-    dto.pendingRetry = result.pendingRetry;
-    return dto;
   }
 }
 

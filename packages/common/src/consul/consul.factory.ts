@@ -253,6 +253,41 @@ export class ConsulConfigFactory {
             services: env.SWAGGER_SERVICES,
           }
         : undefined,
+      smtp:
+        env.KEYCLOAK_SMTP_HOST ||
+        env.KEYCLOAK_SMTP_PORT ||
+        env.KEYCLOAK_SMTP_USER ||
+        env.KEYCLOAK_SMTP_PASSWORD ||
+        env.KEYCLOAK_SMTP_FROM
+          ? {
+              host: env.KEYCLOAK_SMTP_HOST,
+              port: env.KEYCLOAK_SMTP_PORT
+                ? parseInt(env.KEYCLOAK_SMTP_PORT, 10)
+                : undefined,
+              user: env.KEYCLOAK_SMTP_USER,
+              pass: env.KEYCLOAK_SMTP_PASSWORD,
+              from: env.KEYCLOAK_SMTP_FROM,
+              secure: parseBoolean(env.KEYCLOAK_SMTP_SSL),
+              starttls: parseBoolean(env.KEYCLOAK_SMTP_STARTTLS),
+            }
+          : undefined,
+      push: env.FCM_CREDENTIALS
+        ? {
+            fcmCredentials: env.FCM_CREDENTIALS,
+          }
+        : undefined,
+      retry:
+        env.NOTIFICATION_RETRY_MAX_ATTEMPTS ||
+        env.NOTIFICATION_RETRY_INTERVAL_MS
+          ? {
+              maxAttempts: env.NOTIFICATION_RETRY_MAX_ATTEMPTS
+                ? parseInt(env.NOTIFICATION_RETRY_MAX_ATTEMPTS, 10)
+                : undefined,
+              intervalMs: env.NOTIFICATION_RETRY_INTERVAL_MS
+                ? parseInt(env.NOTIFICATION_RETRY_INTERVAL_MS, 10)
+                : undefined,
+            }
+          : undefined,
       services:
         env.QUESTION_SERVICE_URL ||
         env.USER_SERVICE_URL ||
@@ -485,4 +520,20 @@ export class ConsulConfigFactory {
 
     return 'development';
   }
+}
+
+function parseBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
 }

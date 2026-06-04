@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { NotificationType, Prisma } from '@prisma/notification-client';
 import {
-  AcademicWarningRecord,
+  NotificationStatus,
+  NotificationType,
+  Prisma,
+} from '@prisma/notification-client';
+import {
   AcademicWarningDeliveryStatus,
+  AcademicWarningRecord,
+  CreateNotificationInput,
   NotificationRecord,
   NotificationRepository,
+  UpdateDeliveryStatusInput,
 } from '../../../domain/repositories/notification.repository';
 import { PrismaService } from './prisma.service';
 
@@ -14,22 +20,25 @@ export class PrismaNotificationRepository extends NotificationRepository {
     super();
   }
 
-  async createNotification(input: {
-    userId: string;
-    title: string;
-    body: string;
-    data?: unknown;
-    type?: NotificationType;
-    sentAt?: Date;
-  }): Promise<NotificationRecord> {
+  async createNotification(
+    input: CreateNotificationInput,
+  ): Promise<NotificationRecord> {
+    const sentAt =
+      input.sentAt ??
+      (input.status === NotificationStatus.DELIVERED ? new Date() : null);
     return this.prisma.notification.create({
       data: {
         userId: input.userId,
         title: input.title,
         body: input.body,
         type: input.type ?? NotificationType.IN_APP,
+        eventType: input.eventType ?? null,
         data: (input.data ?? {}) as Prisma.InputJsonValue,
-        sentAt: input.sentAt ?? new Date(),
+        status: input.status ?? NotificationStatus.DELIVERED,
+        retryCount: input.retryCount ?? 0,
+        errorMessage: input.errorMessage ?? null,
+        sentAt,
+        deliveredAt: input.deliveredAt ?? null,
       },
     });
   }
@@ -42,11 +51,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
     createdById: string;
   }): Promise<AcademicWarningRecord> {
     const record = await this.prisma.academicWarning.create({ data: input });
-    return {
-      ...record,
-      deliveryStatus:
-        record.deliveryStatus as unknown as AcademicWarningDeliveryStatus,
-    };
+    return this.mapAcademicWarning(record);
   }
 
   async updateAcademicWarningDelivery(
@@ -73,11 +78,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
         }),
       },
     });
-    return {
-      ...record,
-      deliveryStatus:
-        record.deliveryStatus as unknown as AcademicWarningDeliveryStatus,
-    };
+    return this.mapAcademicWarning(record);
   }
 
   async findWarningsDueForRetry(
@@ -92,11 +93,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
       orderBy: { createdAt: 'asc' },
       take,
     });
-    return records.map((record) => ({
-      ...record,
-      deliveryStatus:
-        record.deliveryStatus as unknown as AcademicWarningDeliveryStatus,
-    }));
+    return records.map((record) => this.mapAcademicWarning(record));
   }
 
   async findByUser(
@@ -126,5 +123,47 @@ export class PrismaNotificationRepository extends NotificationRepository {
       where: { id },
       data: { isRead: true, readAt: new Date() },
     });
+  }
+
+  async updateDeliveryStatus(
+    id: string,
+    input: UpdateDeliveryStatusInput,
+  ): Promise<NotificationRecord> {
+    return this.prisma.notification.update({
+      where: { id },
+      data: {
+        status: input.status,
+        retryCount: input.retryCount,
+        errorMessage: input.errorMessage,
+        deliveredAt: input.deliveredAt,
+        sentAt:
+          input.status === NotificationStatus.DELIVERED
+            ? (input.deliveredAt ?? new Date())
+            : undefined,
+      },
+    });
+  }
+
+  private mapAcademicWarning(record: {
+    id: string;
+    studentId: string;
+    reason: string;
+    severity: string;
+    message: string;
+    createdById: string;
+    deliveryStatus: unknown;
+    retryAttempts: number;
+    nextRetryAt: Date | null;
+    notificationId: string | null;
+    lastError: string | null;
+    queuedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): AcademicWarningRecord {
+    return {
+      ...record,
+      deliveryStatus:
+        record.deliveryStatus as unknown as AcademicWarningDeliveryStatus,
+    };
   }
 }

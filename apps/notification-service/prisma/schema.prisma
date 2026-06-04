@@ -15,6 +15,13 @@ enum NotificationType {
   SMS
 }
 
+enum NotificationStatus {
+  PENDING
+  QUEUED
+  DELIVERED
+  FAILED
+}
+
 enum AcademicWarningDeliveryStatus {
   PENDING
   QUEUED
@@ -24,38 +31,57 @@ enum AcademicWarningDeliveryStatus {
 }
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String
-  type      NotificationType @default(IN_APP)
-  title     String           @db.Text
-  body      String           @db.Text
-  data      Json             @default("{}")
-  isRead    Boolean          @default(false)
-  readAt    DateTime?
-  sentAt    DateTime?
-  createdAt DateTime         @default(now())
+  id           String             @id @default(uuid())
+  userId       String
+  type         NotificationType   @default(IN_APP)
+  eventType    String?
+  title        String             @db.Text
+  body         String             @db.Text
+  data         Json               @default("{}")
+  status       NotificationStatus @default(DELIVERED)
+  retryCount   Int                @default(0)
+  errorMessage String?            @db.Text
+  isRead       Boolean            @default(false)
+  readAt       DateTime?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   @@index([userId, isRead, createdAt])
+  @@index([userId, status])
   @@map("notifications")
 }
 
 model AcademicWarning {
-  id          String   @id @default(uuid())
-  studentId   String
-  reason      String   @db.Text
-  severity    String
-  message     String   @db.Text
-  createdById String
+  id             String                        @id @default(uuid())
+  studentId      String
+  reason         String                        @db.Text
+  severity       String
+  message        String                        @db.Text
+  createdById    String
   deliveryStatus AcademicWarningDeliveryStatus @default(PENDING)
-  retryAttempts  Int      @default(0)
+  retryAttempts  Int                           @default(0)
   nextRetryAt    DateTime?
   notificationId String?
-  lastError      String?  @db.Text
+  lastError      String?                       @db.Text
   queuedAt       DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
 
   @@index([studentId, createdAt])
   @@index([deliveryStatus, nextRetryAt])
   @@map("academic_warnings")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("device_tokens")
 }
