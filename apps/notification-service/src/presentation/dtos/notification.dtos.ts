@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import {
   NotificationStatus,
   NotificationType,
@@ -7,9 +15,35 @@ import {
 import { NotificationRecord } from '../../domain/repositories/notification.repository';
 
 export class SendAcademicWarningRequestDto {
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description: 'Single recipient id. Kept for backward compatibility.',
+  })
+  @IsOptional()
   @IsUUID()
-  studentId!: string;
+  studentId?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Batch recipient ids for selected-student flow.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  studentIds?: string[];
+
+  @ApiPropertyOptional({
+    enum: NotificationType,
+    isArray: true,
+    default: [NotificationType.IN_APP],
+    description:
+      'Requested delivery channels. Admin API queues IN_APP warnings; EMAIL/PUSH are driven by event payload and service config.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEnum(NotificationType, { each: true })
+  deliveryChannels?: NotificationType[];
 
   @ApiProperty()
   @IsString()
@@ -31,9 +65,15 @@ export class AcademicWarningAcceptedResponseDto {
   @ApiProperty({ example: 'ACCEPTED' })
   status!: string;
 
+  @ApiProperty()
+  accepted!: number;
+
+  @ApiProperty({ type: [String] })
+  studentIds!: string[];
+
   @ApiProperty({
     description:
-      'Cảnh báo đã được đưa vào hàng đợi để gửi bất đồng bộ cho học viên.',
+      'Warnings were queued through RabbitMQ for asynchronous notification delivery.',
   })
   message!: string;
 }

@@ -15,8 +15,9 @@
 7. [Test student exam session flow](#7-test-student-exam-session-flow)
 8. [Negative scenarios](#8-negative-scenarios)
 9. [Kiểm tra DB và RabbitMQ](#9-kiểm-tra-db-và-rabbitmq)
-10. [Quality gates](#10-quality-gates)
-11. [Troubleshooting](#11-troubleshooting)
+10. [Test Security Audit Và Outbox](#10-test-security-audit-và-outbox)
+11. [Quality gates](#11-quality-gates)
+12. [Troubleshooting](#12-troubleshooting)
 
 ---
 
@@ -1187,7 +1188,139 @@ Failed event có thêm:
 
 ---
 
-## 10. Quality Gates
+## 10. Test Security Audit Và Outbox
+
+Mục tiêu: chứng minh admin exam-template mutations được audit bằng transactional outbox. Student exam session/answer flow không nằm trong audit phase 1; chúng đã được lưu như business state trong `exam_db`.
+
+### 10.1 Audited actions cần cover
+
+| API | Expected audit action |
+| --- | --- |
+| `POST /admin/exams/templates` | `EXAM_TEMPLATE_CREATED` |
+| `PATCH /admin/exams/templates/:id` | `EXAM_TEMPLATE_UPDATED` |
+| `DELETE /admin/exams/templates/:id` | `EXAM_TEMPLATE_DELETED` |
+
+### 10.2 Create template và verify audit
+
+```bash
+curl -i -X POST http://localhost:8000/admin/exams/templates \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Đề thi B1 Audit Demo",
+    "description": "Template created to verify audit trail",
+    "licenseCategory": "B1",
+    "totalQuestions": 1,
+    "passingScore": 1,
+    "durationMinutes": 20,
+    "criticalQuestions": 0,
+    "maxCriticalMistakes": 0,
+    "shuffleQuestions": true,
+    "topicDistribution": [
+      {
+        "topicId": "10000000-0000-0000-0000-000000000101",
+        "questionCount": 1
+      }
+    ]
+  }'
+```
+
+Expected:
+
+- HTTP `201`.
+- Response header có `x-correlation-id`.
+- Response body có `data.id`; lưu lại thành `<template-id>`.
+
+Verify `exam_db.outbox_messages`:
+
+```sql
+SELECT
+  payload->>'action' AS action,
+  payload->>'resourceType' AS resource_type,
+  payload->>'resourceId' AS resource_id,
+  status,
+  attempts,
+  "publishedAt",
+  "lastError"
+FROM outbox_messages
+ORDER BY "createdAt" DESC
+LIMIT 10;
+```
+
+Expected:
+
+- `action = EXAM_TEMPLATE_CREATED`.
+- `resource_type = EXAM_TEMPLATE`.
+- `resource_id = <template-id>`.
+- Bình thường sau vài giây `status = PUBLISHED`.
+
+### 10.3 Update template và query centralized audit
+
+```bash
+curl -i -X PATCH http://localhost:8000/admin/exams/templates/<template-id> \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Đề thi B1 Audit Demo Updated", "version": 1 }'
+```
+
+Query audit-service:
+
+```bash
+curl -s "http://localhost:8000/admin/audit-logs?serviceName=exam-service&resourceId=<template-id>" \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" | jq '.data.items | map({action, resourceId, metadata, correlationId})'
+```
+
+Expected:
+
+- Có `EXAM_TEMPLATE_CREATED`.
+- Có `EXAM_TEMPLATE_UPDATED`.
+- Metadata update có `name` và `version`.
+
+### 10.4 Delete template audit
+
+Chỉ delete được template chưa có session:
+
+```bash
+curl -i -X DELETE "http://localhost:8000/admin/exams/templates/<template-id>" \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "version": 2 }'
+```
+
+Expected:
+
+- HTTP `200`.
+- Audit action `EXAM_TEMPLATE_DELETED`.
+- Nếu template đã có session, API trả `EXAM_TEMPLATE_IN_USE` và không tạo success audit event phase này.
+
+### 10.5 Outbox failure demo
+
+```bash
+docker compose stop rabbitmq
+
+curl -i -X PATCH http://localhost:8000/admin/exams/templates/<template-id> \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "description": "Updated while RabbitMQ is down", "version": 2 }'
+```
+
+Expected:
+
+- Business update vẫn commit nếu request path không cần RabbitMQ trực tiếp.
+- `exam_db.outbox_messages` có row `PENDING` hoặc `FAILED`.
+- Audit-service chưa có record mới ngay.
+
+Start RabbitMQ:
+
+```bash
+docker compose start rabbitmq
+```
+
+Expected: pending outbox được relay và audit record xuất hiện.
+
+---
+
+## 11. Quality Gates
 
 Chạy hẹp trước:
 
@@ -1213,7 +1346,7 @@ npm --workspace=apps/exam-service run test
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### 11.1 `401 UNAUTHORIZED`
 
@@ -1371,3 +1504,15 @@ Expected: response contains question snapshots and options only. It must not con
 ### Template Snapshot
 
 After starting a session, verify `exam_sessions` stores template snapshot columns. Updating the template later must not change existing session grading/history context.
+## SRS UC32 Missed Review Tests
+
+1. Empty history:
+   `GET /exams/review/missed-questions?limit=20`; expect `items=[]`.
+2. Frequent mode:
+   after multiple wrong answers for the same question, call `mode=frequent`; expect that question first and `missedCount > 1`.
+3. Recent mode:
+   call `mode=recent`; expect latest wrong question first.
+4. Period filter:
+   call `periodDays=1`; expect only recent completed/timed-out sessions to contribute.
+5. Safety:
+   verify response does not include `correctOptionId`.

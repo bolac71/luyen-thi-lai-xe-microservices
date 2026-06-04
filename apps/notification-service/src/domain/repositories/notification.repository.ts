@@ -3,6 +3,14 @@ import {
   NotificationType,
 } from '@prisma/notification-client';
 
+export enum AcademicWarningDeliveryStatus {
+  PENDING = 'PENDING',
+  QUEUED = 'QUEUED',
+  PENDING_RETRY = 'PENDING_RETRY',
+  FAILED = 'FAILED',
+  SENT = 'SENT',
+}
+
 export interface NotificationRecord {
   id: string;
   userId: string;
@@ -29,7 +37,14 @@ export interface AcademicWarningRecord {
   severity: string;
   message: string;
   createdById: string;
+  deliveryStatus: AcademicWarningDeliveryStatus;
+  retryAttempts: number;
+  nextRetryAt: Date | null;
+  notificationId: string | null;
+  lastError: string | null;
+  queuedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface CreateNotificationInput {
@@ -65,6 +80,23 @@ export abstract class NotificationRepository {
     message: string;
     createdById: string;
   }): Promise<AcademicWarningRecord>;
+
+  abstract updateAcademicWarningDelivery(
+    id: string,
+    input: {
+      deliveryStatus: AcademicWarningDeliveryStatus;
+      notificationId?: string | null;
+      lastError?: string | null;
+      queuedAt?: Date | null;
+      nextRetryAt?: Date | null;
+      retryAttempts?: number;
+    },
+  ): Promise<AcademicWarningRecord>;
+
+  abstract findWarningsDueForRetry(
+    now: Date,
+    take: number,
+  ): Promise<AcademicWarningRecord[]>;
 
   abstract findByUser(
     userId: string,

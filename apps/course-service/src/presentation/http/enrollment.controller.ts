@@ -7,7 +7,10 @@ import {
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import { buildAuditRequestContext } from '@repo/common';
+import type { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser, Roles } from 'nest-keycloak-connect';
 import { CompleteLessonCommand } from '../../application/use-cases/complete-lesson/complete-lesson.command';
@@ -87,18 +90,21 @@ export class EnrollmentController {
   }
 
   @Post(':id/reset-progress')
-  @Roles({ roles: ['realm:STUDENT'] })
+  @Roles({ roles: ['realm:STUDENT', 'realm:ADMIN', 'realm:CENTER_MANAGER'] })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset current student enrollment progress' })
   async resetProgress(
     @AuthenticatedUser() user: JwtPayload,
     @Headers('x-user-id') headerUserId: string | undefined,
     @Param('id') enrollmentId: string,
+    @Req() request: Request,
   ): Promise<EnrollmentResponseDto> {
+    const actorId = resolveActorId(user, headerUserId);
     const result = await this.resetEnrollmentProgressUseCase.execute(
       new ResetEnrollmentProgressCommand(
         enrollmentId,
-        resolveActorId(user, headerUserId),
+        actorId,
+        buildAuditRequestContext(request, user),
       ),
     );
     return EnrollmentResponseDto.fromResult(result);

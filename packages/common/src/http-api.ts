@@ -5,6 +5,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type {
   ArgumentsHost,
   CallHandler,
@@ -21,6 +22,7 @@ export type ApiErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  | 'SERVICE_UNAVAILABLE'
   | 'TOO_MANY_REQUESTS'
   | 'INTERNAL_ERROR';
 
@@ -36,6 +38,8 @@ export function mapStatusToErrorCode(status: number): ApiErrorCode {
       return 'NOT_FOUND';
     case HttpStatus.CONFLICT:
       return 'CONFLICT';
+    case HttpStatus.SERVICE_UNAVAILABLE:
+      return 'SERVICE_UNAVAILABLE';
     case HttpStatus.TOO_MANY_REQUESTS:
       return 'TOO_MANY_REQUESTS';
     default:
@@ -58,6 +62,8 @@ export class ApiResponseInterceptor<T>
       }
     >
 {
+  constructor(private readonly reflector: Reflector = new Reflector()) {}
+
   intercept(
     context: ExecutionContext,
     next: CallHandler<T>,
@@ -83,6 +89,26 @@ export class ApiResponseInterceptor<T>
     const httpContext = context.switchToHttp();
     const request = httpContext.getRequest<Request>();
     const response = httpContext.getResponse<Response>();
+    const path = request.originalUrl ?? request.url;
+    const skipApiResponse =
+      path.startsWith('/metrics') ||
+      path.startsWith('/docs-config') ||
+      path.startsWith('/docs-json') ||
+      this.reflector?.getAllAndOverride<boolean>('skip-api-response', [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+
+    if (skipApiResponse) {
+      return next.handle() as Observable<{
+        success: boolean;
+        code: string;
+        message: string;
+        timestamp: string;
+        path: string;
+        data: T;
+      }>;
+    }
 
     return next.handle().pipe(
       map((data) => {
@@ -114,6 +140,23 @@ export class ApiResponseInterceptor<T>
       }),
     );
   }
+}
+
+export function extractErrorCode(message: unknown): string | undefined {
+  if (!message) return undefined;
+  if (typeof message === 'string') {
+    const match = message.match(/\bMSG\d+\b/);
+    return match ? match[0] : undefined;
+  }
+  if (Array.isArray(message)) {
+    for (const item of message) {
+      if (typeof item === 'string') {
+        const match = item.match(/\bMSG\d+\b/);
+        if (match) return match[0];
+      }
+    }
+  }
+  return undefined;
 }
 
 export class ApiExceptionFilter implements ExceptionFilter {
@@ -172,10 +215,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
       }
     }
 
+    const errorCode = extractErrorCode(message) ?? extractErrorCode(errors);
+
     response.status(status).json({
       success: false,
       code,
       message,
+      errorCode,
       timestamp: new Date().toISOString(),
       path: request.originalUrl ?? request.url,
       errors,

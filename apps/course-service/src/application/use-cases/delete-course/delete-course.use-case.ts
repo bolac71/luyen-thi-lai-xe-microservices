@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { IUseCase } from '@repo/common';
+import { createAuditEvent, IUseCase } from '@repo/common';
 import { CourseNotFoundException } from '../../../domain/exceptions/course-not-found.exception';
+import { CourseHasActiveEnrollmentsException } from '../../../domain/exceptions/course-has-active-enrollments.exception';
 import { CourseRepository } from '../../../domain/repositories/course.repository';
 import { CourseCachePort } from '../../ports/course-cache.port';
 import { CourseResult } from '../shared/course.result';
@@ -18,9 +19,30 @@ export class DeleteCourseUseCase
   async execute(command: DeleteCourseCommand): Promise<CourseResult> {
     const course = await this.courseRepository.findById(command.courseId);
     if (!course) throw new CourseNotFoundException(command.courseId);
+    const activeEnrollments = await this.courseRepository.countEnrollments(
+      course.id,
+    );
+    if (activeEnrollments > 0) {
+      throw new CourseHasActiveEnrollmentsException(course.id);
+    }
 
-    course.archive();
-    await this.courseRepository.save(course);
+    course.archive(command.actorId);
+    await this.courseRepository.save(
+      course,
+      createAuditEvent({
+        serviceName: 'course-service',
+        actorId: command.actorId ?? course.createdById,
+        action: 'COURSE_ARCHIVED',
+        resourceType: 'COURSE',
+        resourceId: course.id,
+        requestContext: command.auditContext,
+        metadata: {
+          status: course.status,
+          isDeleted: course.isDeleted,
+          deletedAt: course.deletedAt?.toISOString(),
+        },
+      }),
+    );
     await this.courseCache.invalidateCourse(course.id);
     await this.courseCache.invalidateLists();
 

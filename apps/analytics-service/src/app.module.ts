@@ -11,7 +11,14 @@ import {
   TokenValidation,
 } from 'nest-keycloak-connect';
 import Redis from 'ioredis';
-import { ConsulConfigFactory } from '@repo/common';
+import {
+  AppLoggerModule,
+  ConsulConfigFactory,
+  HealthModule,
+  MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
+} from '@repo/common';
 import Joi from 'joi';
 import { LearningProgressRepository } from './domain/repositories/learning-progress.repository';
 import {
@@ -27,7 +34,23 @@ import { MessagingController } from './presentation/messaging/messaging.controll
 
 @Module({
   imports: [
+    AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'analytics-service',
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        { name: 'redis', configKey: 'redis.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
+    }),
+    MetricsModule.register({ serviceName: 'analytics-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({
@@ -61,6 +84,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
               realm: Joi.string().default('luyen-thi-lai-xe-realm'),
               clientId: Joi.string().default('nestjs-backend'),
               clientSecret: Joi.string().optional(),
+              timeoutMs: Joi.number().default(10000),
             }).default(),
           }).unknown(true),
           'analytics-service',
@@ -81,6 +105,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [AnalyticsController, MessagingController],
   providers: [
@@ -109,6 +134,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     GetProgressUseCase,
     RecordLearningEventUseCase,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

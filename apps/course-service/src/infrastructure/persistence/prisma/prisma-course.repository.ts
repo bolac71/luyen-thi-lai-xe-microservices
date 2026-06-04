@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { AuditEventEnvelope } from '@repo/common';
+import { Prisma } from '@prisma/course-client';
 import { Course } from '../../../domain/aggregates/course/course.aggregate';
 import {
   CourseRepository,
@@ -28,7 +30,22 @@ export class PrismaCourseRepository extends CourseRepository {
   }
 
   async existsById(id: string): Promise<boolean> {
-    const count = await this.prisma.course.count({ where: { id } });
+    const count = await this.prisma.course.count({
+      where: { id, isDeleted: false },
+    });
+    return count > 0;
+  }
+
+  async existsByCourseCode(
+    courseCode: string,
+    excludeCourseId?: string,
+  ): Promise<boolean> {
+    const count = await this.prisma.course.count({
+      where: {
+        courseCode,
+        ...(excludeCourseId && { id: { not: excludeCourseId } }),
+      },
+    });
     return count > 0;
   }
 
@@ -39,6 +56,7 @@ export class PrismaCourseRepository extends CourseRepository {
       }),
       ...(filter.status && { status: filter.status }),
       ...(!filter.status && { status: { not: 'ARCHIVED' as const } }),
+      isDeleted: false,
       ...(filter.createdById && { createdById: filter.createdById }),
     };
 
@@ -72,12 +90,13 @@ export class PrismaCourseRepository extends CourseRepository {
     });
   }
 
-  async save(course: Course): Promise<void> {
+  async save(course: Course, auditEvent?: AuditEventEnvelope): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.course.upsert({
         where: { id: course.id },
         create: {
           id: course.id,
+          courseCode: course.courseCode,
           title: course.title,
           description: course.description,
           licenseCategory: course.licenseCategory,
@@ -86,12 +105,17 @@ export class PrismaCourseRepository extends CourseRepository {
           tuitionFee: course.tuitionFee,
           capacity: course.capacity,
           status: course.status,
+          version: course.version,
+          isDeleted: course.isDeleted,
+          deletedAt: course.deletedAt,
+          deletedBy: course.deletedBy,
           createdById: course.createdById,
           createdAt: course.createdAt,
           updatedAt: course.updatedAt,
         },
         update: {
           title: course.title,
+          courseCode: course.courseCode,
           description: course.description,
           licenseCategory: course.licenseCategory,
           totalLessons: course.totalLessons,
@@ -99,6 +123,10 @@ export class PrismaCourseRepository extends CourseRepository {
           tuitionFee: course.tuitionFee,
           capacity: course.capacity,
           status: course.status,
+          version: course.version,
+          isDeleted: course.isDeleted,
+          deletedAt: course.deletedAt,
+          deletedBy: course.deletedBy,
           updatedAt: course.updatedAt,
         },
       });
@@ -163,6 +191,15 @@ export class PrismaCourseRepository extends CourseRepository {
             type: m.type,
             createdAt: m.createdAt,
           })),
+        });
+      }
+
+      if (auditEvent) {
+        await tx.outboxMessage.create({
+          data: {
+            eventName: auditEvent.eventName,
+            payload: auditEvent as unknown as Prisma.InputJsonValue,
+          },
         });
       }
     });

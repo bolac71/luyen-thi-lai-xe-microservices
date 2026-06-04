@@ -1,7 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ConsulConfigFactory } from '@repo/common';
+import {
+  AppLoggerModule,
+  ConsulConfigFactory,
+  HealthModule,
+  MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
+} from '@repo/common';
 import Joi from 'joi';
 import {
   AuthGuard,
@@ -16,7 +23,22 @@ import { QuestionModule } from './question.module';
 
 @Module({
   imports: [
+    AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'question-service',
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
+    }),
+    MetricsModule.register({ serviceName: 'question-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({
@@ -47,6 +69,7 @@ import { QuestionModule } from './question.module';
               realm: Joi.string().required(),
               clientId: Joi.string().required(),
               clientSecret: Joi.string().optional(),
+              timeoutMs: Joi.number().default(10000),
             }).required(),
           }).unknown(true),
           'question-service',
@@ -68,10 +91,12 @@ import { QuestionModule } from './question.module';
       }),
     }),
     QuestionModule,
+    TokenBlacklistModule,
   ],
   controllers: [],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

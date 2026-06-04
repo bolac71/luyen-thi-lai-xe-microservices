@@ -120,7 +120,7 @@ services:
     routes:
       - name: simulation-route
         paths:
-          - /simulations
+          - /simulation
         strip_path: false
       - name: simulation-swagger-route
         paths:
@@ -144,15 +144,18 @@ services:
           - /media-service
         strip_path: true
 
-  # 9. Swagger UI tập trung
-  - name: docs-service
-    url: http://docs-service:3000
+  # 10. Centralized security audit trail
+  - name: audit-service
+    url: http://audit-service:3000
     routes:
-      - name: docs-route
+      - name: audit-admin-route
         paths:
-          - /docs
+          - /admin/audit-logs
         strip_path: false
-
+      - name: audit-swagger-route
+        paths:
+          - /audit-service
+        strip_path: true
 # ========================================================
 # Cấu hình Plugins chung (Optional)
 # ========================================================
@@ -161,9 +164,19 @@ plugins:
     config:
       origins:
         - http://localhost:3000
+        - http://localhost:3001
+        - http://localhost:3009
+        - http://localhost:4173
         - http://localhost:5173
+        - http://localhost:5174
+        - http://localhost:4200
         - http://127.0.0.1:3000
+        - http://127.0.0.1:3001
+        - http://127.0.0.1:3009
+        - http://127.0.0.1:4173
         - http://127.0.0.1:5173
+        - http://127.0.0.1:5174
+        - http://127.0.0.1:4200
       methods:
         - GET
         - POST
@@ -177,14 +190,25 @@ plugins:
         - Content-Type
         - Origin
         - X-Requested-With
+        - x-correlation-id
         - x-user-id
         - x-user-role
       exposed_headers:
         - Authorization
+        - x-correlation-id
       credentials: true
       max_age: 3600
+  - name: correlation-id
+    config:
+      header_name: x-correlation-id
+      generator: uuid#counter
+      echo_downstream: true
+  - name: zipkin
+    config:
+      http_endpoint: http://jaeger:9411/api/v2/spans
+      sample_ratio: 1
   - name: rate-limiting
     config:
-      second: 5
+      second: 100
       hour: 1000
       policy: local

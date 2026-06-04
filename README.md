@@ -1,70 +1,56 @@
-# Luyện Thi Lái Xe Microservices - Dev Guide
+# Luyện Thi Lái Xe Microservices
 
-Tài liệu này là file duy nhất để team dev hiểu cách code và vận hành local cho repo.
+Tài liệu này gom phần quan trọng nhất để team dev chạy local, verify code và nắm nhanh các luồng DevOps hiện có trong repo.
 
-File roadmap các việc cần làm tiếp theo: [README.NEXT-STEPS.md](./README.NEXT-STEPS.md)
+File roadmap việc tiếp theo: [README.NEXT-STEPS.md](./README.NEXT-STEPS.md)
+Tổng kết DevOps hiện tại: [DEVOPS-SUMMARY.md](./DEVOPS-SUMMARY.md)
 
-## 1. Tổng quan kiến trúc
+## 1. Tổng quan
 
-- Monorepo: npm workspaces + Turborepo
-- Backend: NestJS microservices trong `apps/*`
-- Gateway: Kong DB-less trong `kong/kong.yaml`
-- Message broker: RabbitMQ
-- Database: Postgres (database per service)
+- Monorepo dùng `npm workspaces` + `turbo`
+- Backend chính là các NestJS services trong `apps/*`
+- Gateway:
+  - `kong/kong.dev.yaml` cho hybrid local
+  - `kong/kong.yaml` cho full Docker / deploy
+- Config tập trung qua Consul
+- Message broker qua RabbitMQ
+- Logging có thể đẩy sang ELK qua Logstash
 
-## 2. Cấu trúc thư mục
+## 2. Services hiện có
 
-```text
-apps/
-  identity-service/
-  user-service/
-  exam-service/
-  course-service/
-  question-service/
-  notification-service/
-  analytics-service/
-  simulation-service/
-packages/
-  common/              # Thư viện nội bộ dùng chung
-  eslint-config/
-  typescript-config/
-kong/
-  kong.yaml
-docker-compose.yaml
-```
+- Production services (10):
+  - `identity-service`
+  - `user-service`
+  - `exam-service`
+  - `course-service`
+  - `question-service`
+  - `notification-service`
+  - `analytics-service`
+  - `simulation-service`
+  - `audit-service`
+  - `media-service`
+- Dev-only supporting service:
+  - `docs-service` dùng cho tài liệu / Swagger tổng hợp khi cần, không đưa vào Production
 
 ## 3. First Run Cho Dev/Frontend Clone Repo Lần Đầu
 
-Khuyến nghị cho frontend/dev mới kéo repo: chạy backend ở **hybrid mode**: infra bằng Docker, service NestJS chạy local. Cách này dễ debug hơn full Docker và ít gặp lỗi build image.
+Khuyến nghị cho frontend/dev mới kéo repo: chạy backend ở hybrid mode. Infra chạy bằng Docker, service NestJS chạy local. Cách này dễ debug hơn full Docker và ít gặp lỗi build image.
 
 Yêu cầu:
 
-- Docker Desktop đang chạy.
-- Node.js >= 18.
-- npm. Trên Windows nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd`.
+- Docker Desktop đang chạy
+- Node.js >= 18
+- npm. Trên Windows nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd`
 
 Từ root repo, chạy theo đúng thứ tự:
 
 ```powershell
-# 1. Cài dependencies
 npm.cmd install
-
-# 2. Bật infra: Postgres, Redis, RabbitMQ, Consul, Keycloak, Kong
 npm.cmd run infra:up
-
-# 3. Seed Consul config cho local mode
 npm.cmd run consul:seed:local
-
-# 4. Generate Prisma clients cho tất cả service
 npm.cmd run db:generate
-
-# 5. Apply migrations cho tất cả service DB
 npm.cmd run db:deploy
-
-# 6. Seed demo data + demo users vào Keycloak
 npm.cmd run db:seed
-
-# 7. Chạy toàn bộ backend services local
 npm.cmd run dev
 ```
 
@@ -76,6 +62,7 @@ Sau khi chạy xong:
 - Consul: http://localhost:8500
 - RabbitMQ UI: http://localhost:15672
 - Mailpit: http://localhost:8025
+- Kibana: http://localhost:5601
 
 Demo accounts được seed vào Keycloak, password chung:
 
@@ -106,7 +93,7 @@ npm.cmd run infra:down
 docker compose -f docker-compose.infra.yml down -v
 ```
 
-Sau đó chạy lại từ bước 2.
+Sau đó chạy lại từ bước `infra:up`.
 
 ## 4. Chạy full stack bằng Docker
 
@@ -114,10 +101,17 @@ Yêu cầu:
 
 - Docker Desktop
 
-Start:
+Khởi động:
 
 ```bash
-docker compose up --build
+npm run docker:up
+```
+
+Tắt:
+
+```bash
+npm run docker:down
+docker compose down
 ```
 
 URL quan trọng:
@@ -125,311 +119,210 @@ URL quan trọng:
 - Kong Proxy: http://localhost:8000
 - Kong Admin API: http://localhost:8001
 - RabbitMQ UI: http://localhost:15672
-- **Consul UI & KV Store: http://localhost:8500** (centralized configuration)
+- Consul UI: http://localhost:8500
+- Keycloak: http://localhost:8080
+- Kibana: http://localhost:5601
 
-Stop:
-
-```bash
-docker compose down
-```
-
-## 5. Consul Configuration Management
-
-Tất cả microservices sử dụng **Consul** để quản lý configuration tập trung.
-
-### Consul là gì?
-
-Consul cung cấp Key-Value Store (KV store) cho cấu hình của tất cả services. Khi services khởi động, chúng tự động nạp configuration từ Consul.
-
-**Ưu điểm:**
-
-- Configuration tập trung - dễ dàng thay đổi mà không cần rebuild container
-- Fallback to .env files - nếu Consul không hoạt động, services vẫn dùng .env
-- Health check tự động - Consul kiểm tra kết nối trước khi nạp config
-
-### Truy cập Consul UI
-
-Mở browser: **http://localhost:8500**
-
-Có thể browse tất cả configuration keys dưới `/config/development/`
-
-### Quản lý Configuration
-
-Xem hướng dẫn đầy đủ: [CONFIG_CONSUL.md](./CONFIG_CONSUL.md)
-
-Các command hữu ích:
-
-```bash
-# Seed configuration vào Consul
-npm run consul:seed
-
-# Liệt kê tất cả keys
-npm run consul:list /config/development
-
-# Xem value của 1 key
-npm run consul:get /config/development/identity-service/database.url
-```
-
-## 6. Route qua gateway
-
-- /auth -> identity-service
-- /users -> user-service
-- /exams -> exam-service
-- /questions -> question-service
-- /courses -> course-service
-- /notifications -> notification-service
-- /analytics -> analytics-service
-- /simulation -> simulation-service
-
-## 7. Chạy local để code/debug
+## 5. Chạy local để code/debug
 
 Yêu cầu:
 
 - Node.js >= 18
 - npm
+- Docker Desktop
 
-Install dependencies:
+Các bước cơ bản:
 
 ```bash
 npm install
+npm run infra:up
+npm run consul:seed:local
+npm run dev
 ```
 
-Chạy 1 service:
+Nếu cần generate Prisma client trước khi build hoặc check:
 
 ```bash
-npm run start:dev -w identity-service
+npm run prisma:generate
+# hoặc
+npm run db:generate
 ```
 
-Lưu ý:
+Nếu cần apply migration + seed:
 
-- Mặc định service dùng PORT=3000.
-- Nếu chạy nhiều service local, set PORT riêng.
-
-PowerShell example:
-
-```powershell
-$env:PORT=3001
-npm run start:dev -w identity-service
+```bash
+npm run db:deploy
+npm run db:seed
 ```
 
-Scripts ở root:
+Smoke test health qua Kong:
+
+```bash
+npm run smoke
+```
+
+## 6. Root Scripts hữu ích
 
 ```bash
 npm run build
-npm run dev
-npm run lint
 npm run check-types
+npm run lint
 npm run format
+npm run prisma:generate
+npm run db:generate
+npm run db:migrate
+npm run db:deploy
+npm run db:seed
+npm run db:seed:question-images
+npm run db:backup:local
+npm run smoke
 ```
 
-Lệnh DB/seed demo:
+## 7. Consul Configuration Management
+
+Tất cả microservices sử dụng Consul để quản lý configuration tập trung. Repo vẫn hỗ trợ seed cấu hình local qua JSON, và trong Docker thì `consul-init` sẽ seed tự động khi stack lên.
+
+Các command hữu ích:
 
 ```bash
-# Generate Prisma clients for all services
-npm run db:generate
-
-# Apply migrations for all service databases
-npm run db:migrate
-
-# Seed deterministic demo data for all services.
-# This also seeds demo users into Keycloak when Keycloak is running.
-npm run db:seed
-
-# Optional: parse seed/600-cau-hoi.docx, upload/link question images to Azure Blob
-npm run db:seed:question-images
+npm run consul:seed
+npm run consul:seed:local
+npm run consul:list
+npm run consul:get
 ```
 
-Nếu chạy bằng Docker network nội bộ:
+Hướng dẫn chi tiết: [guides/consul/WORKFLOW.md](./guides/consul/WORKFLOW.md)
+
+## 8. Gateway Routes
+
+- `/auth` -> `identity-service`
+- `/users` -> `user-service`
+- `/exams` -> `exam-service`
+- `/questions` -> `question-service`
+- `/courses` -> `course-service`
+- `/notifications` -> `notification-service`
+- `/analytics` -> `analytics-service`
+- `/simulation` -> `simulation-service`
+- `/media` -> `media-service`
+- `/admin/audit-logs` -> `audit-service`
+
+## 9. Seed demo data khi chạy bằng Docker
 
 ```bash
 docker compose up -d consul consul-init keycloak redis rabbitmq \
   db-identity db-user db-media db-question db-exam db-course \
-  db-notification db-analytics db-simulation
+  db-notification db-analytics db-simulation db-audit
 docker compose run --rm identity-service npm run db:deploy -w identity-service
 docker compose run --rm identity-service npm run db:seed -w identity-service
 ```
 
 Demo accounts được seed vào Keycloak và các service DB dùng chung password `123456`.
 
-## 8. Cách tạo service mới
+## 10. Ghi chú DevOps
 
-Ví dụ service mới: payment-service
+- Trạng thái tổng quan:
+  - MVP/local/GCP đã khá đầy đủ: Docker, Kong, Consul, RabbitMQ, Keycloak, ELK, Prometheus/Grafana, backup, runbook.
+  - CI/CD đã có PR validation, main image release, Trivy scan và production release thủ công bằng immutable image tag.
+  - Production hardening còn thiếu: secret manager chính thức, load test, HPA và Terraform. SBOM/signing và rollback workflow đã có baseline trong GitHub Actions.
+- Production scope đã chốt: 10 services; `docs-service` chỉ dùng cho Dev.
+- CI/CD:
+  - Pull Request Validation: quality gate, build image, Trivy scan, không push image.
+  - Main Image Release: build đủ 10 production images, Trivy scan, push GHCR bằng tag `${git_sha}` và `latest`, rồi auto deploy GCP staging bằng Helm.
+  - Production Release: chạy thủ công bằng immutable image tag, gắn GitHub Environment `production`.
+  - Jenkins: pipeline tự host/legacy cho GHCR + Docker Compose deploy qua SSH/VM hoặc Compute Engine; GitHub Actions vẫn là đường chính cho GCP/GKE.
+  - DORA Metrics Report: đo Deployment Frequency, Lead Time for Changes, MTTR và Change Failure Rate theo `guides/devops/DORA-METRICS.md`.
+  - Incident/Postmortem: issue templates + auto labeler để chuẩn hóa dữ liệu MTTR/CFR theo `guides/devops/INCIDENT-POSTMORTEM-PROCESS.md`.
+  - Deployment Event Store: mỗi lần deploy ghi event JSON và upload artifact để DORA report đọc theo `guides/devops/DEPLOYMENT-EVENT-STORE.md`.
+  - Jenkins DORA Integration: Jenkinsfile ghi deployment event sau staging/production deploy và archive artifact theo `guides/devops/JENKINS-DORA-INTEGRATION.md`.
+  - DORA Grafana Dashboard: export DORA JSON sang Prometheus metrics và hiển thị dashboard theo `guides/devops/DORA-GRAFANA-DASHBOARD.md`.
+  - OpenTelemetry/Jaeger: trace end-to-end từ Kong đến NestJS services theo `guides/devops/OPENTELEMETRY-JAEGER-TRACING.md`.
+  - Business Metrics: đo user mới, lượt làm bài thi, pass/fail, hoàn tất bài học/khóa học, notification delivery và upload media theo `guides/devops/BUSINESS-METRICS.md`.
+  - GitHub Actions Release Safety: SBOM, Cosign signing và rollback workflow theo `guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md`.
+- Deployment:
+  - Kubernetes baseline dùng Helm chart tại `charts/luyen-thi-lai-xe`.
+  - Target hiện tại là GCP/GKE, self-contained dependencies trong cluster cho giai đoạn MVP.
+  - GCP/GKE chỉ pull image từ GHCR theo tag được truyền vào Helm; không build source code trên GCP.
+  - K3s/VPS chỉ còn là hướng lab hoặc fallback legacy, không phải target production chính.
+  - Hướng dẫn setup nằm ở `guides/devops/PHASE5-KUBERNETES.md`.
+- Health endpoints chuẩn: `/health`, `/health/live`, `/health/ready` (Xem đặc tả tại [api-spec-health-metrics.md](./guides/api/api-spec-health-metrics.md))
+  - Hướng dẫn setup nằm ở `guides/devops/KUBERNETES-GCP-DEPLOYMENT.md`.
+  - Checklist GCP chi tiết nằm ở `guides/devops/GCP-SETUP.md`.
+  - Kịch bản demo DevOps nằm ở `guides/devops/DEVOPS-DEMO-SCRIPT.md`.
+- Health endpoints chuẩn:
+  - `/health`
+  - `/health/live`
+  - `/health/ready`
+- Smoke test cấp root ở [scripts/smoke.ts](./scripts/smoke.ts)
+- Bộ điều phối migration cấp root ở [scripts/prisma-migrate-all.ts](./scripts/prisma-migrate-all.ts)
+- Bộ điều phối seed cấp root ở [scripts/prisma-seed-all.ts](./scripts/prisma-seed-all.ts)
+- Script sao lưu DB local ở [scripts/db-backup-local.ts](./scripts/db-backup-local.ts)
+  - Backup đủ các DB local: `identity`, `user`, `exam`, `course`, `question`, `notification`, `analytics`, `simulation`, `media`, `audit`, `keycloak`
+- Scaffold Jenkins / GHCR / Docker Compose deploy ở:
+  - [Jenkinsfile](./Jenkinsfile)
+  - [docker-compose.deploy.yml](./docker-compose.deploy.yml)
+  - [guides/devops/JENKINS-DOCKER-COMPOSE.md](./guides/devops/JENKINS-DOCKER-COMPOSE.md)
+- Logging + ELK + Correlation ID + Metrics + Alerting ở [guides/devops/OBSERVABILITY-ELK.md](./guides/devops/OBSERVABILITY-ELK.md)
+- Runbook Observability ở [guides/devops/OBSERVABILITY-RUNBOOK.md](./guides/devops/OBSERVABILITY-RUNBOOK.md)
+- Tổng hợp trạng thái và gap DevOps ở [DEVOPS-SUMMARY.md](./DEVOPS-SUMMARY.md)
+- Đo lường DevOps theo DORA ở [guides/devops/DORA-METRICS.md](./guides/devops/DORA-METRICS.md)
+- Quy trình incident/postmortem cho DORA ở [guides/devops/INCIDENT-POSTMORTEM-PROCESS.md](./guides/devops/INCIDENT-POSTMORTEM-PROCESS.md)
+- Deployment event store cho DORA ở [guides/devops/DEPLOYMENT-EVENT-STORE.md](./guides/devops/DEPLOYMENT-EVENT-STORE.md)
+- Jenkins DORA integration ở [guides/devops/JENKINS-DORA-INTEGRATION.md](./guides/devops/JENKINS-DORA-INTEGRATION.md)
+- DORA Grafana dashboard ở [guides/devops/DORA-GRAFANA-DASHBOARD.md](./guides/devops/DORA-GRAFANA-DASHBOARD.md)
+- OpenTelemetry/Jaeger tracing ở [guides/devops/OPENTELEMETRY-JAEGER-TRACING.md](./guides/devops/OPENTELEMETRY-JAEGER-TRACING.md)
+- Business metrics ở [guides/devops/BUSINESS-METRICS.md](./guides/devops/BUSINESS-METRICS.md)
+- GitHub Actions release safety ở [guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md](./guides/devops/GITHUB-ACTIONS-RELEASE-SAFETY.md)
 
-Bước 1 - Scaffold service
+## 11. Quy trình làm việc
 
-- Có thể clone từ service có sẵn để giữ convention.
-- Hoặc tạo mới:
+1. Tạo branch từ `main`
+2. Code và commit theo từng scope nhỏ
+3. Chạy `npm run check-types` và `npm run build` trước khi push
+4. Nếu có thay đổi API hoặc infra, chạy thêm `npm run smoke`
+5. Mở PR và chỉ merge khi CI pass
 
-```bash
-npx @nestjs/cli new apps/payment-service --package-manager npm --skip-git
+## 12. Chiến thuật Availability: Health Check + Restart
+
+Tactic đang áp dụng:
+
+- Phát hiện lỗi: Ping/Echo qua `/health/live`, sanity checking qua `/health/ready`, monitor nhanh bằng `npm run smoke`.
+- Khôi phục sau lỗi: Docker Compose dùng `restart: unless-stopped` để tự chạy lại service khi process/container chết.
+- Docker healthcheck đánh dấu service `healthy/unhealthy` trong `docker compose ps`; Docker Compose không tự restart container chỉ vì healthcheck bị `unhealthy` nếu process vẫn đang chạy.
+
+Kiểm tra health qua Kong:
+
+```powershell
+docker compose up -d --build kong identity-service user-service exam-service course-service question-service notification-service analytics-service simulation-service media-service audit-service
+npm.cmd run smoke
 ```
 
-Bước 2 - Cập nhật package của service
+`npm run smoke` mặc định chờ 300ms giữa mỗi request để không chạm rate-limit của Kong khi demo. Nếu cần chạy nhanh hơn trong môi trường đã tắt hoặc nâng rate-limit:
 
-- Sửa `name` trong `apps/payment-service/package.json`
-- Nếu cần dùng thư viện nội bộ, thêm dependency `@repo/common`
-
-Bước 3 - Tạo Dockerfile
-
-- Copy pattern từ `apps/identity-service/Dockerfile`
-- Sửa filter thành `payment-service`
-
-Bước 4 - Đăng ký vào docker compose
-
-- Thêm `db-payment` (nếu cần DB)
-- Thêm service `payment-service` trong `docker-compose.yaml`
-
-Bước 5 - Đăng ký route Kong
-
-- Thêm service + route trong `kong/kong.yaml`
-- Restart Kong:
-
-```bash
-docker compose restart kong
+```powershell
+$env:SMOKE_DELAY_MS=0
+npm.cmd run smoke
 ```
 
-Bước 6 - Smoke test
+Kiểm tra trực tiếp service:
 
-```bash
-docker compose up --build -d
-curl http://localhost:8000/payments
+```powershell
+curl http://localhost:3001/health/live
+curl http://localhost:3001/health/ready
+curl http://localhost:3010/health/ready
 ```
 
-## 7. Sử dụng thư viện nội bộ packages/common
+Demo lỗi dependency:
 
-Mục tiêu của `packages/common/src`:
-
-- Chứa constants, DTO, event contract, helper dùng chung.
-
-Quy trình dùng:
-
-1. Tạo file module dùng chung trong `packages/common/src/...`
-2. Re-export trong `packages/common/src/index.ts`
-3. Import từ service:
-
-```ts
-import { USER_CREATED_EVENT } from "@repo/common";
+```powershell
+docker compose stop db-user
+curl http://localhost:3002/health/ready
+docker compose start db-user
+curl http://localhost:3002/health/ready
 ```
 
-4. Đảm bảo service có dependency `@repo/common` trong package.json.
+Demo restart:
 
-Quy ước:
-
-- Event name format: `domain.action.v1`
-- Breaking change thì tạo version mới, không sửa để vỡ tương thích.
-
-## 8. Quy trình code trong team
-
-1. Kéo code mới nhất.
-2. Chạy lint + typecheck trước khi push.
-3. Chạy test service đang sửa.
-4. Smoke test qua Kong nếu có thay đổi API/event.
-5. Cập nhật tài liệu nếu thay đổi route, contract hoặc convention.
-
-### 8.1 Git workflow khi làm việc với CI (bắt buộc)
-
-Nguyên tắc:
-
-- Không code trực tiếp trên `main`.
-- Mọi tính năng/bugfix phải đi qua nhánh riêng + Pull Request.
-- Chỉ merge khi CI pass.
-- Tuyệt đối không merge khi CI đang chạy hoặc có job fail.
-
-Luồng làm việc đề xuất cho 1 tính năng mới:
-
-1. Đồng bộ nhánh main mới nhất:
-
-```bash
-git checkout main
-git pull origin main
+```powershell
+docker compose exec user-service sh -c "kill -9 1"
+docker compose ps user-service
 ```
-
-2. Tạo nhánh feature từ main (đặt tên rõ ý nghĩa):
-
-```bash
-git checkout -b feature/user-registration
-```
-
-3. Code + commit từng bước nhỏ, message rõ ràng:
-
-```bash
-git add .
-git commit -m "feat(identity): add user registration endpoint"
-```
-
-4. Trước khi push, chạy quality gate local:
-
-```bash
-npm run lint
-npm run check-types
-npm run test -w identity-service
-```
-
-5. Push nhánh lên remote:
-
-```bash
-git push -u origin feature/user-registration
-```
-
-6. Tạo Pull Request: `feature/user-registration` -> `main`.
-7. Chờ CI chạy xong (lint/test/build) và xử lý comment review.
-8. Merge PR khi đã pass CI và được approve.
-
-Rule bắt buộc trước khi merge:
-
-- Tất cả CI checks phải ở trạng thái `success`.
-- Không merge nếu check còn `pending`.
-
-Sau khi merge xong, dọn dẹp nhánh đã dùng:
-
-1. Xóa nhánh local:
-
-```bash
-git checkout main
-git pull origin main
-git branch -d feature/user-registration
-```
-
-2. Xóa nhánh remote:
-
-```bash
-git push origin --delete feature/user-registration
-```
-
-Lưu ý:
-
-- Dùng `git branch -d` để an toàn (chỉ xóa khi nhánh đã được merge).
-- Nếu cần xóa nhánh chưa merge (không khuyến khích), mới dùng `git branch -D <branch-name>`.
-- Nếu nhánh có thay đổi mới trong lúc đang code, hãy rebase/merge từ `main` để giảm conflict trước khi mở PR.
-
-Lệnh gợi ý:
-
-```bash
-npm run lint
-npm run check-types
-npm run test -w identity-service
-```
-
-## 9. Troubleshooting nhanh
-
-Kong route không nhận:
-
-- Kiểm tra route trong `kong/kong.yaml`
-- Restart Kong
-
-RabbitMQ không nhận event:
-
-- Kiểm tra tên queue/event producer-consumer trùng nhau
-- Kiểm tra host là `rabbitmq` khi chạy trong docker network
-
-Bị trùng port local:
-
-- Set PORT riêng cho từng service
-
-## 10. Definition of Done cho feature/service
-
-- Có validation input
-- Có unit test cho business logic chính
-- Có e2e test cho endpoint quan trọng
-- Đã đăng ký gateway route nếu là API mới
-- Đã cập nhật tài liệu liên quan

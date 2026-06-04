@@ -51,6 +51,13 @@ model UserProfile {
   licenseAssignmentAudits LicenseAssignmentAudit[]
 
   @@map("user_profiles")
+  // ASR-PERF-02: pg_trgm GIN indexes for ILIKE-based user search across all searchable fields.
+  // PostgreSQL's bitmap index OR-scan combines these 3 indexes when the query
+  // uses OR conditions: fullName ILIKE | email ILIKE | phoneNumber ILIKE.
+  // Requires CREATE EXTENSION IF NOT EXISTS pg_trgm (added to migration).
+  @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_user_profiles_fullname_trgm")
+  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_user_profiles_email_trgm")
+  @@index([phoneNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_user_profiles_phone_trgm")
 }
 
 model StudentDetail {
@@ -76,4 +83,26 @@ model LicenseAssignmentAudit {
   student UserProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("license_assignment_audits")
+}
+
+enum OutboxMessageStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model OutboxMessage {
+  id            String              @id @default(uuid())
+  eventName     String
+  payload       Json
+  status        OutboxMessageStatus @default(PENDING)
+  attempts      Int                 @default(0)
+  nextAttemptAt DateTime            @default(now())
+  publishedAt   DateTime?
+  lastError     String?             @db.Text
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@map("outbox_messages")
 }

@@ -2,13 +2,23 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AppLoggerModule, ConsulConfigFactory } from '@repo/common';
+import {
+  AppLoggerModule,
+  ConsulConfigFactory,
+  HealthModule,
+  MetricsModule,
+} from '@repo/common';
 import Joi from 'joi';
 
 @Module({
   imports: [
     AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'docs-service',
+    }),
+    MetricsModule.register({ serviceName: 'docs-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({

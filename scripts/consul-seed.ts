@@ -11,12 +11,68 @@ interface ConsulKVEntry {
   value: string;
 }
 
+loadDotEnvFile();
+
 const CONSUL_URL = process.env.CONSUL_URL || 'http://localhost:8500';
 const DEFAULT_ENV = process.env.ENV || 'development';
+const PLACEHOLDER_PATTERN = /\$\{([A-Z0-9_]+)(?::-(.*?))?\}/g;
+
+function loadDotEnvFile(): void {
+  const envFile = path.join(process.cwd(), '.env');
+  if (!fs.existsSync(envFile)) {
+    return;
+  }
+
+  const lines = fs.readFileSync(envFile, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+    if (process.env[key] !== undefined) {
+      continue;
+    }
+
+    process.env[key] = rawValue.replace(/^(['"])(.*)\1$/, '$2');
+  }
+}
+
+function resolvePlaceholders(value: string, env: string): string {
+  return value.replace(
+    PLACEHOLDER_PATTERN,
+    (match, name: string, defaultValue: string | undefined) => {
+      const envValue = process.env[name];
+      if (envValue !== undefined && envValue !== '') {
+        return envValue;
+      }
+
+      if (defaultValue !== undefined) {
+        return defaultValue;
+      }
+
+      if (env === 'staging' || env === 'production') {
+        throw new Error(
+          `Missing required environment variable "${name}" while resolving ${match}`,
+        );
+      }
+
+      return '';
+    },
+  );
+}
 
 async function flatten(
   obj: ConsulSeedConfig,
   prefix: string = '',
+  env: string = DEFAULT_ENV,
 ): Promise<ConsulKVEntry[]> {
   const entries: ConsulKVEntry[] = [];
 
@@ -24,9 +80,11 @@ async function flatten(
     const fullKey = prefix ? `${prefix}/${key}` : key;
 
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      entries.push(...(await flatten(value as ConsulSeedConfig, fullKey)));
+      entries.push(...(await flatten(value as ConsulSeedConfig, fullKey, env)));
     } else {
-      entries.push({ key: fullKey, value: JSON.stringify(value) });
+      const resolvedValue =
+        typeof value === 'string' ? resolvePlaceholders(value, env) : value;
+      entries.push({ key: fullKey, value: JSON.stringify(resolvedValue) });
     }
   }
 
@@ -73,7 +131,7 @@ async function seedConsul(env: string): Promise<void> {
   await cleanConsulPrefix(`config/${env}/`);
 
   // Flatten the hierarchical config (không có leading slash để khớp với ConsulConfigService)
-  const entries = await flatten(envConfig, `config/${env}`);
+  const entries = await flatten(envConfig, `config/${env}`, env);
 
   console.log(`\n✓ Found ${entries.length} configuration keys to seed`);
 

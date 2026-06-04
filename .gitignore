@@ -17,7 +17,23 @@ out/
 # Local env files (Chặn file môi trường ở mọi nơi)
 .env
 .env.*
+*.env
 !.env.example
+!.env.vps.example
+
+# Local Kubernetes/Helm secrets
+charts/**/values-*.local.yaml
+charts/**/values-*.secret.yaml
+rendered-*.yaml
+kubeconfig*.yaml
+local-deploy-values.yaml
+
+# Local Terraform state and credentials
+terraform/terraform.tfvars
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform/
+terraform/.terraform.lock.hcl
 
 # Consul seed production (chứa secrets thật - không commit)
 consul-seed-production.json
@@ -32,6 +48,9 @@ yarn-error.log*
 pids
 *.pid
 *.seed
+backups/
+reports/dora/
+reports/deployments/
 
 # Testing
 **/coverage/
@@ -46,4 +65,9 @@ pids
 # Misc
 .DS_Store
 *.pem
+context
 
+# DevOps presentation and lessons learned documents
+devops_presentation_walkthrough.md
+devops_lessons_learned.md
+devops_detailed_ops_walkthrough.md

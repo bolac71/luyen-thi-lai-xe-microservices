@@ -413,3 +413,260 @@ npm.cmd run db:seed
 ```
 
 The simulation seed inserts deterministic maneuver/checkpoint/error content for demo license categories. Without seed data, `GET /simulation/maneuvers` and `GET /simulation/maneuver-errors` correctly return empty arrays, so the frontend should treat an empty list as “no content seeded yet”, not as an API failure.
+## SRS Alignment Additions: UC35/UC36 (2D Driving Practice)
+
+### POST `/simulation/practice2d/sessions`
+
+Starts a 2D practice session for the current student. The session begins in `IN_PROGRESS`.
+
+**Auth:** `STUDENT`
+
+**Body**
+
+```json
+{
+  "licenseCategory": "B1",
+  "clientCapabilities": {
+    "canvas": true,
+    "webgl": true,
+    "keyboard": true,
+    "touch": false
+  },
+  "persistTelemetry": true
+}
+```
+
+**Validation**
+
+*   `licenseCategory`: Required `LicenseCategory`.
+*   `clientCapabilities`: Required object. Must have (`canvas` or `webgl`) = `true`, and (`keyboard` or `touch`) = `true`. Otherwise, returns `MSG131` (HTTP 400).
+*   `persistTelemetry`: Optional boolean (default `false`). If `true`, the last ingested telemetry event will be stored in the session.
+
+**Response `201 Created`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:00.000Z",
+  "path": "/simulation/practice2d/sessions",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-uuid",
+    "licenseCategory": "B1",
+    "status": "IN_PROGRESS",
+    "clientCapabilities": {
+      "canvas": true,
+      "webgl": true,
+      "keyboard": true,
+      "touch": false
+    },
+    "persistTelemetry": true,
+    "totalEvents": 0,
+    "errorCount": 0,
+    "totalPenalty": 0,
+    "score": null,
+    "summary": {},
+    "startedAt": "2026-05-21T10:00:00.000Z",
+    "endedAt": null
+  }
+}
+```
+
+---
+
+### POST `/simulation/practice2d/sessions/:id/telemetry`
+
+Ingests live telemetry packet from the 2D simulator client, runs the error detection rules engine (overspeed, off-lane, collision), and returns immediate color-coded error feedback.
+
+**Auth:** `STUDENT`
+
+**Path Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uuid` | yes | 2D practice session id |
+
+**Body**
+
+```json
+{
+  "type": "LANE_KEEPING",
+  "speedKmh": 65,
+  "laneOffset": 1.2,
+  "collision": false,
+  "signal": "LEFT",
+  "payload": {
+    "x": 105.4,
+    "y": 204.2,
+    "heading": 90
+  }
+}
+```
+
+**Validation**
+
+*   `type`: Required string (telemetry type e.g., `LANE_KEEPING`, `STEERING`).
+*   `collision`: Optional boolean.
+*   `speedKmh`: Optional number.
+*   `laneOffset`: Optional number.
+
+**Response `201 Created`**
+
+If a rule is violated, it returns the generated warning/fatal feedback:
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:00:01.000Z",
+  "path": "/simulation/practice2d/sessions/session-uuid/telemetry",
+  "data": {
+    "id": "feedback-event-uuid",
+    "telemetryType": "LANE_KEEPING",
+    "errorCode": "OVERSPEED",
+    "severity": "WARNING",
+    "penalty": 10,
+    "message": "Speed exceeded the configured practice threshold.",
+    "hint": "Slow down before entering the next checkpoint.",
+    "occurredAt": "2026-05-21T10:00:01.000Z"
+  }
+}
+```
+
+*   **Error Detection Logic:**
+    *   `collision` = `true` ➔ `errorCode` = `"COLLISION"`, `severity` = `"FATAL"`, `penalty` = `100`.
+    *   `speedKmh` > `60` ➔ `errorCode` = `"OVERSPEED"`, `severity` = `"WARNING"`, `penalty` = `10`.
+    *   `abs(laneOffset)` > `1.0` ➔ `errorCode` = `"LANE_DEPARTURE"`, `severity` = `"WARNING"`, `penalty` = `5`.
+
+---
+
+### POST `/simulation/practice2d/sessions/:id/end`
+
+Ends or abandons the active 2D practice session. It calculates the final score = `max(0, 100 - totalPenalty)`, updates status to `COMPLETED` (or `ABANDONED`), and publishes `practice2d.session.completed` asynchronously via RabbitMQ (consumed by `analytics-service` to update progress).
+
+**Auth:** `STUDENT`
+
+**Path Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uuid` | yes | 2D practice session id |
+
+**Body**
+
+```json
+{
+  "abandoned": false
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:15:00.000Z",
+  "path": "/simulation/practice2d/sessions/session-uuid/end",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-uuid",
+    "licenseCategory": "B1",
+    "status": "COMPLETED",
+    "clientCapabilities": {
+      "canvas": true,
+      "webgl": true,
+      "keyboard": true,
+      "touch": false
+    },
+    "persistTelemetry": true,
+    "totalEvents": 150,
+    "errorCount": 2,
+    "totalPenalty": 15,
+    "score": 85,
+    "summary": {
+      "totalEvents": 150,
+      "errorCount": 2,
+      "totalPenalty": 15,
+      "score": 85,
+      "status": "COMPLETED"
+    },
+    "startedAt": "2026-05-21T10:00:00.000Z",
+    "endedAt": "2026-05-21T10:15:00.000Z"
+  }
+}
+```
+
+---
+
+### GET `/simulation/practice2d/sessions/:id`
+
+Retrieves a detailed summary of a 2D practice session including all feedback events triggered.
+
+**Auth:** `STUDENT`
+
+**Path Parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `uuid` | yes | 2D practice session id |
+
+**Response `200 OK`**
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "OK",
+  "timestamp": "2026-05-21T10:20:00.000Z",
+  "path": "/simulation/practice2d/sessions/session-uuid",
+  "data": {
+    "id": "session-uuid",
+    "studentId": "student-uuid",
+    "licenseCategory": "B1",
+    "status": "COMPLETED",
+    "clientCapabilities": {
+      "canvas": true,
+      "webgl": true,
+      "keyboard": true,
+      "touch": false
+    },
+    "persistTelemetry": true,
+    "totalEvents": 150,
+    "errorCount": 2,
+    "totalPenalty": 15,
+    "score": 85,
+    "summary": {
+      "totalEvents": 150,
+      "errorCount": 2,
+      "totalPenalty": 15,
+      "score": 85,
+      "status": "COMPLETED"
+    },
+    "startedAt": "2026-05-21T10:00:00.000Z",
+    "endedAt": "2026-05-21T10:15:00.000Z",
+    "feedbackEvents": [
+      {
+        "id": "feedback-event-uuid-1",
+        "telemetryType": "LANE_KEEPING",
+        "errorCode": "OVERSPEED",
+        "severity": "WARNING",
+        "penalty": 10,
+        "message": "Speed exceeded the configured practice threshold.",
+        "hint": "Slow down before entering the next checkpoint.",
+        "occurredAt": "2026-05-21T10:00:01.000Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### Maneuver Metadata
+
+`ManeuverCheckpoint` supports coordinates `x`, `y` and `visualColor`. `ManeuverError` supports `pointsDeducted`, `isFatal`, `isGeneral`, `isActive`, `visualColor`, and `icon`; `GET /simulation/maneuver-errors` returns active general errors only.

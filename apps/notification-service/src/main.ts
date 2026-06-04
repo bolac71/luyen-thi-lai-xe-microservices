@@ -1,56 +1,101 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { NestFactory, Reflector } from '@nestjs/core';
 import {
-  NOTIFICATION_DLX_EXCHANGE,
-  NOTIFICATION_QUEUE,
-} from './infrastructure/messaging/rabbitmq.constants';
-import {
+  AccessLogInterceptor,
   ApiExceptionFilter,
   ApiResponseInterceptor,
+  assertRabbitMqResilienceTopology,
+  CorrelationIdInterceptor,
+  CorrelationIdMiddleware,
+  createRabbitMqConsumerOptions,
+  getRabbitMqUrl,
+  installLocalDevTransientErrorGuard,
+  MetricsService,
+  RabbitMqRetryInterceptor,
+  runBootstrapWithRetries,
   setupMicroserviceSwagger,
+  startOpenTelemetry,
+  TracingInterceptor,
+  TracingMiddleware,
+  WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
 
+const serviceName = 'notification-service';
+startOpenTelemetry({ serviceName });
+installLocalDevTransientErrorGuard(serviceName);
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
   const configService = app.get(ConfigService);
-  const rabbitmqUrl =
-    configService.get<string>('rabbitmq.url') ?? 'amqp://localhost:5672';
+  const rabbitmqUrl = getRabbitMqUrl(configService);
+  const rabbitmqQueue = 'notification_service_events';
+  const retryDelaysMs = createRetryDelays(configService);
+  await assertRabbitMqResilienceTopology(rabbitmqUrl, {
+    queue: rabbitmqQueue,
+    retryDelaysMs,
+  });
   const port = configService.get<number>('port') ?? 3000;
 
   app.enableCors();
-  app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.use(new CorrelationIdMiddleware().use);
+  app.use(new TracingMiddleware(serviceName).use);
+  app.useGlobalInterceptors(
+    new CorrelationIdInterceptor(),
+    new TracingInterceptor(serviceName),
+    new AccessLogInterceptor({ serviceName }),
+    new ApiResponseInterceptor(app.get(Reflector)),
+  );
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalFilters(new ApiExceptionFilter());
 
   setupMicroserviceSwagger(app, {
     title: 'Notification Service API',
     description:
-      'Dịch vụ gửi thông báo bất đồng bộ (in-app, email qua SMTP/Mailpit, push qua FCM). Tiêu thụ event từ RabbitMQ với cơ chế retry có độ trễ và DLQ.',
+      'Dịch vụ gửi thông báo bất đồng bộ (in-app, email qua SMTP/Mailpit, push qua FCM) và tiêu thụ event RabbitMQ với retry/DLQ.',
   });
 
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.RMQ,
-    options: {
-      urls: [rabbitmqUrl],
-      queue: NOTIFICATION_QUEUE,
-      queueOptions: {
-        durable: true,
-        arguments: {
-          'x-dead-letter-exchange': NOTIFICATION_DLX_EXCHANGE,
+  app
+    .connectMicroservice(
+      createRabbitMqConsumerOptions({
+        url: rabbitmqUrl,
+        queue: rabbitmqQueue,
+      }),
+    )
+    .useGlobalInterceptors(
+      new CorrelationIdInterceptor(),
+      new TracingInterceptor(serviceName),
+      new RabbitMqRetryInterceptor(
+        {
+          queue: rabbitmqQueue,
+          retryDelaysMs,
         },
-      },
-      noAck: false,
-    },
-  });
+        app.get(MetricsService),
+      ),
+    );
 
   await app.startAllMicroservices();
   await app.listen(port);
-  console.log(`✓ Notification Service listening on port ${port}`);
+  logger.log(`Notification Service listening on port ${port}`);
 }
-void bootstrap();
+void runBootstrapWithRetries(serviceName, bootstrap);
+
+function createRetryDelays(configService: ConfigService): number[] {
+  const maxAttempts = Math.max(
+    1,
+    configService.get<number>('retry.maxAttempts') ?? 3,
+  );
+  const intervalMs = Math.max(
+    1000,
+    configService.get<number>('retry.intervalMs') ?? 300000,
+  );
+
+  return Array.from({ length: maxAttempts }, () => intervalMs);
+}

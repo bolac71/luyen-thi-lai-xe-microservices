@@ -1,36 +1,69 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import {
   ApiExceptionFilter,
   ApiResponseInterceptor,
+  AccessLogInterceptor,
+  assertRabbitMqResilienceTopology,
+  createRabbitMqConsumerOptions,
+  CorrelationIdInterceptor,
+  CorrelationIdMiddleware,
+  getRabbitMqUrl,
+  installLocalDevTransientErrorGuard,
+  MetricsService,
+  RabbitMqRetryInterceptor,
+  runBootstrapWithRetries,
   setupMicroserviceSwagger,
+  startOpenTelemetry,
+  TracingInterceptor,
+  TracingMiddleware,
+  WINSTON_MODULE_NEST_PROVIDER,
 } from '@repo/common';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
 
+const serviceName = 'user-service';
+startOpenTelemetry({ serviceName });
+installLocalDevTransientErrorGuard(serviceName);
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
+
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   const configService = app.get(ConfigService);
-  const rabbitmqUrl =
-    configService.get<string>('rabbitmq.url') ?? 'amqp://localhost:5672';
-
-  // Connect RabbitMQ microservice for consuming events
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.RMQ,
-    options: {
-      urls: [rabbitmqUrl],
-      queue: 'user_service_events',
-      queueOptions: { durable: true },
-      noAck: false,
-    },
+  const rabbitmqUrl = getRabbitMqUrl(configService);
+  const rabbitmqQueue = 'user_service_events';
+  await assertRabbitMqResilienceTopology(rabbitmqUrl, {
+    queue: rabbitmqQueue,
   });
 
+  // Connect RabbitMQ microservice for consuming events
+  app
+    .connectMicroservice(
+      createRabbitMqConsumerOptions({ url: rabbitmqUrl, queue: rabbitmqQueue }),
+    )
+    .useGlobalInterceptors(
+      new CorrelationIdInterceptor(),
+      new TracingInterceptor(serviceName),
+      new RabbitMqRetryInterceptor(
+        { queue: rabbitmqQueue },
+        app.get(MetricsService),
+      ),
+    );
+
   app.enableCors();
+  app.use(new CorrelationIdMiddleware().use);
+  app.use(new TracingMiddleware(serviceName).use);
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
-  app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.useGlobalInterceptors(
+    new CorrelationIdInterceptor(),
+    new TracingInterceptor(serviceName),
+    new AccessLogInterceptor({ serviceName }),
+    new ApiResponseInterceptor(app.get(Reflector)),
+  );
   app.useGlobalFilters(new ApiExceptionFilter(), new DomainExceptionFilter());
 
   // Cấu hình Swagger
@@ -43,6 +76,6 @@ async function bootstrap() {
 
   await app.startAllMicroservices();
   await app.listen(port);
-  console.log(`✓ User Service listening on port ${port}`);
+  logger.log(`User Service listening on port ${port}`);
 }
-void bootstrap();
+void runBootstrapWithRetries(serviceName, bootstrap);

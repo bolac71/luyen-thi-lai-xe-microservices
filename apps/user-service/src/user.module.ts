@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
+import { createRabbitMqClientOptions } from '@repo/common';
 import { EventPublisher } from './application/ports/event-publisher.port';
 import { AssignLicenseTierUseCase } from './application/use-cases/assign-license-tier/assign-license-tier.use-case';
 import { CreateUserProfileUseCase } from './application/use-cases/create-user-profile/create-user-profile.use-case';
@@ -18,6 +19,10 @@ import {
   RABBITMQ_CLIENT,
   RabbitMqEventPublisher,
 } from './infrastructure/messaging/rabbitmq-event-publisher.service';
+import {
+  AUDIT_SERVICE_CLIENT,
+  AuditOutboxRelayService,
+} from './infrastructure/outbox/audit-outbox-relay.service';
 import { PrismaUserProfileRepository } from './infrastructure/persistence/prisma/prisma-user-profile.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
 import { AdminUserController } from './presentation/http/admin-user.controller';
@@ -30,44 +35,26 @@ import { MessagingController } from './presentation/messaging/messaging.controll
       {
         name: RABBITMQ_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'user_service_publish',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'user_service_publish'),
       },
       {
         name: MEDIA_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'media_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'media_service_events'),
       },
       {
         name: COURSE_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'course_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'course_service_events'),
+      },
+      {
+        name: AUDIT_SERVICE_CLIENT,
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'audit_service_events'),
       },
     ]),
   ],
@@ -78,6 +65,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
 
     { provide: UserProfileRepository, useClass: PrismaUserProfileRepository },
     { provide: EventPublisher, useClass: RabbitMqEventPublisher },
+    AuditOutboxRelayService,
 
     CreateUserProfileUseCase,
     UpdateUserProfileUseCase,

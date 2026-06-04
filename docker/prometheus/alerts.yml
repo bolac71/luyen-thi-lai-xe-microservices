@@ -1,0 +1,95 @@
+groups:
+  - name: microservices-slo
+    rules:
+      - alert: ServiceMetricsEndpointDown
+        expr: up{job=~"microservices.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service metrics endpoint is down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for more than 2 minutes."
+
+      - alert: HighHttp5xxRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status_class="5xx"}[5m]))
+            /
+          clamp_min(sum by (service) (rate(http_requests_total[5m])), 1)
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx rate"
+          description: "{{ $labels.service }} has more than 5% HTTP 5xx responses for 5 minutes."
+
+      - alert: HighHttpLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 HTTP latency"
+          description: "{{ $labels.service }} p95 latency is above 1 second for 5 minutes."
+
+      - alert: HighNodeMemoryUsage
+        expr: |
+          nodejs_process_resident_memory_bytes
+            /
+          nodejs_os_total_memory_bytes
+            > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Node.js memory usage"
+          description: "{{ $labels.service }} process memory is above 80% of host memory for 5 minutes."
+
+      - alert: HighNodeCpuUsage
+        expr: rate(nodejs_process_cpu_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Node.js CPU usage"
+          description: "{{ $labels.service }} CPU usage is above 80% of one core for 5 minutes."
+
+      - alert: RabbitMqDlqHasMessages
+        expr: sum by (queue) (rabbitmq_queue_messages_ready{queue=~".*\\.dlq"}) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ DLQ has messages"
+          description: "{{ $labels.queue }} has messages waiting in DLQ for more than 2 minutes."
+
+      - alert: RabbitMqRetryBacklogHigh
+        expr: sum by (queue) (rabbitmq_queue_messages_ready{queue=~".*\\.retry\\..*"}) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ retry backlog is high"
+          description: "{{ $labels.queue }} has more than 50 retry messages for 5 minutes."
+
+      - alert: RabbitMqMessagesDeadLettered
+        expr: sum by (service, queue) (increase(rabbitmq_messages_dead_lettered_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service routed messages to DLQ"
+          description: "{{ $labels.service }} routed messages from {{ $labels.queue }} to DLQ in the last 5 minutes."
+
+      - alert: RabbitMqRetryRateHigh
+        expr: sum by (service, queue) (rate(rabbitmq_message_retries_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ retry rate is high"
+          description: "{{ $labels.service }} is retrying messages from {{ $labels.queue }} at more than 0.2 msg/s for 5 minutes."

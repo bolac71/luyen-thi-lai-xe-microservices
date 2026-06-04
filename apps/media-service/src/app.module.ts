@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ConsulConfigFactory } from '@repo/common';
+import {
+  AppLoggerModule,
+  ConsulConfigFactory,
+  HealthModule,
+  MetricsModule,
+} from '@repo/common';
 import Joi from 'joi';
 import {
   AuthGuard,
@@ -16,7 +21,22 @@ import { MediaModule } from './media.module';
 
 @Module({
   imports: [
+    AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'media-service',
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
+    }),
+    MetricsModule.register({ serviceName: 'media-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({
@@ -40,6 +60,7 @@ import { MediaModule } from './media.module';
               realm: Joi.string().required(),
               clientId: Joi.string().required(),
               clientSecret: Joi.string().optional(),
+              timeoutMs: Joi.number().default(10000),
             }).required(),
             storage: Joi.object({
               accountName: Joi.string().required(),

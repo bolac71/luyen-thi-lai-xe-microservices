@@ -15,8 +15,16 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { buildAuditRequestContext } from '@repo/common';
 import { Public, Roles } from 'nest-keycloak-connect';
-import { AppService } from '../../app.service';
+import { ForgotPasswordCommand } from '../../application/use-cases/forgot-password/forgot-password.command';
+import { ForgotPasswordUseCase } from '../../application/use-cases/forgot-password/forgot-password.use-case';
+import { LoginCommand } from '../../application/use-cases/login/login.command';
+import { LoginUseCase } from '../../application/use-cases/login/login.use-case';
+import { LogoutCommand } from '../../application/use-cases/logout/logout.command';
+import { LogoutUseCase } from '../../application/use-cases/logout/logout.use-case';
+import { RefreshTokenCommand } from '../../application/use-cases/refresh-token/refresh-token.command';
+import { RefreshTokenUseCase } from '../../application/use-cases/refresh-token/refresh-token.use-case';
 import { ForgotPasswordRequestDto } from '../dtos/forgot-password.request.dto';
 import { ForgotPasswordResponseDto } from '../dtos/forgot-password.response.dto';
 import { LoginRequestDto } from '../dtos/login.request.dto';
@@ -28,14 +36,30 @@ import { RefreshTokenRequestDto } from '../dtos/refresh-token.request.dto';
 @ApiTags('auth')
 @Controller()
 export class AuthController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly loginUseCase: LoginUseCase,
+    private readonly logoutUseCase: LogoutUseCase,
+    private readonly refreshTokenUseCase: RefreshTokenUseCase,
+    private readonly forgotPasswordUseCase: ForgotPasswordUseCase,
+  ) {}
 
   @Post('login')
   @Public()
   @ApiBody({ type: LoginRequestDto })
   @ApiOkResponse({ type: LoginResponseDto })
-  async login(@Body() body: LoginRequestDto): Promise<LoginResponseDto> {
-    return this.appService.login(body.username, body.password);
+  async login(
+    @Body() body: LoginRequestDto,
+    @Req() request: Request,
+  ): Promise<LoginResponseDto> {
+    return this.loginUseCase.execute(
+      new LoginCommand(
+        body.username,
+        body.password,
+        // auditContext is populated without a user (public endpoint).
+        // actorId defaults to the username for failed-login traceability.
+        buildAuditRequestContext(request, undefined),
+      ),
+    );
   }
 
   @Post('logout')
@@ -53,7 +77,9 @@ export class AuthController {
   ): Promise<LogoutResponseDto> {
     const authHeader = req.headers.authorization ?? '';
     const accessToken = authHeader.replace(/^Bearer\s+/i, '');
-    return this.appService.logout(accessToken, body.refreshToken);
+    return this.logoutUseCase.execute(
+      new LogoutCommand(accessToken, body.refreshToken),
+    );
   }
 
   @Post('refresh')
@@ -67,7 +93,9 @@ export class AuthController {
   async refresh(
     @Body() body: RefreshTokenRequestDto,
   ): Promise<LoginResponseDto> {
-    return this.appService.refreshToken(body.refreshToken);
+    return this.refreshTokenUseCase.execute(
+      new RefreshTokenCommand(body.refreshToken),
+    );
   }
 
   @Post('forgot-password')
@@ -78,7 +106,9 @@ export class AuthController {
   async forgotPassword(
     @Body() body: ForgotPasswordRequestDto,
   ): Promise<ForgotPasswordResponseDto> {
-    return this.appService.forgotPassword(body.email);
+    return this.forgotPasswordUseCase.execute(
+      new ForgotPasswordCommand(body.email),
+    );
   }
 
   @Get('public')

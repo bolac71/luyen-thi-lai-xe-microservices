@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
+import { createRabbitMqClientOptions } from '@repo/common';
 import Redis from 'ioredis';
 import { CourseCachePort } from './application/ports/course-cache.port';
 import { EventPublisher } from './application/ports/event-publisher.port';
@@ -33,6 +34,10 @@ import {
   RABBITMQ_CLIENT,
   RabbitMqEventPublisher,
 } from './infrastructure/messaging/rabbitmq-event-publisher.service';
+import {
+  AUDIT_SERVICE_CLIENT,
+  AuditOutboxRelayService,
+} from './infrastructure/outbox/audit-outbox-relay.service';
 import { PrismaCourseEnrollmentRepository } from './infrastructure/persistence/prisma/prisma-course-enrollment.repository';
 import { PrismaCourseRepository } from './infrastructure/persistence/prisma/prisma-course.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
@@ -48,44 +53,26 @@ import { MessagingController } from './presentation/messaging/messaging.controll
       {
         name: RABBITMQ_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'course_service_publish',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'course_service_publish'),
       },
       {
         name: MEDIA_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'media_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'media_service_events'),
       },
       {
         name: ANALYTICS_SERVICE_CLIENT,
         inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672',
-            ],
-            queue: 'analytics_service_events',
-            queueOptions: { durable: true },
-          },
-        }),
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'analytics_service_events'),
+      },
+      {
+        name: AUDIT_SERVICE_CLIENT,
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) =>
+          createRabbitMqClientOptions(config, 'audit_service_events'),
       },
     ]),
   ],
@@ -129,6 +116,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
 
     // EventPublisher binding
     { provide: EventPublisher, useClass: RabbitMqEventPublisher },
+    AuditOutboxRelayService,
     { provide: CourseCachePort, useClass: RedisCourseCacheService },
 
     // Course use cases

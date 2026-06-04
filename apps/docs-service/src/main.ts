@@ -1,13 +1,43 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { WINSTON_MODULE_NEST_PROVIDER } from '@repo/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
+import {
+  AccessLogInterceptor,
+  ApiExceptionFilter,
+  ApiResponseInterceptor,
+  CorrelationIdInterceptor,
+  CorrelationIdMiddleware,
+  installLocalDevTransientErrorGuard,
+  runBootstrapWithRetries,
+  setupCors,
+  startOpenTelemetry,
+  TracingInterceptor,
+  TracingMiddleware,
+  WINSTON_MODULE_NEST_PROVIDER,
+} from '@repo/common';
 import { AppModule } from './app.module';
+
+const serviceName = 'docs-service';
+startOpenTelemetry({ serviceName });
+installLocalDevTransientErrorGuard(serviceName);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  setupCors(app);
+  app.use(new CorrelationIdMiddleware().use);
+  app.use(new TracingMiddleware(serviceName).use);
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  app.useGlobalInterceptors(
+    new CorrelationIdInterceptor(),
+    new TracingInterceptor(serviceName),
+    new AccessLogInterceptor({ serviceName }),
+    new ApiResponseInterceptor(app.get(Reflector)),
+  );
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') ?? 3009;
@@ -31,6 +61,6 @@ async function bootstrap() {
   });
 
   await app.listen(port);
-  console.log(`✓ Docs Service running at http://localhost:${port}/docs`);
+  logger.log(`Docs Service running at http://localhost:${port}/docs`);
 }
-bootstrap();
+void runBootstrapWithRetries(serviceName, bootstrap);

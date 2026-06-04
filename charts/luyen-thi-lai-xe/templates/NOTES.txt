@@ -1,0 +1,17 @@
+Phase 5 Kubernetes release installed:
+
+  Release: {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+  API URL: {{ .Values.config.gatewayPublicUrl }}
+  Keycloak URL: {{ .Values.config.keycloakPublicUrl }}
+  Image tag: {{ .Values.global.imageTag }}
+
+Smoke test examples:
+
+  curl {{ .Values.config.gatewayPublicUrl }}/identity-service/health/live
+  curl {{ .Values.config.gatewayPublicUrl }}/identity-service/health/ready
+
+Rollback:
+
+  helm history {{ .Release.Name }} -n {{ .Release.Namespace }}
+  helm rollback {{ .Release.Name }} <revision> -n {{ .Release.Namespace }}

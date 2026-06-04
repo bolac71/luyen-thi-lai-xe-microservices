@@ -1,41 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import { InjectMetric } from '@willsoto/nestjs-prometheus';
-import { Counter, Gauge } from 'prom-client';
-
-export const NOTIFICATION_MESSAGES_CONSUMED_TOTAL =
-  'notification_messages_consumed_total';
-export const NOTIFICATION_DELIVERY_SUCCESS_TOTAL =
-  'notification_delivery_success_total';
-export const NOTIFICATION_DELIVERY_FAILED_TOTAL =
-  'notification_delivery_failed_total';
-export const NOTIFICATION_DLQ_DEPTH = 'notification_dlq_depth';
+import { MetricsService } from '@repo/common';
 
 @Injectable()
 export class NotificationMetrics {
-  constructor(
-    @InjectMetric(NOTIFICATION_MESSAGES_CONSUMED_TOTAL)
-    private readonly consumed: Counter<string>,
-    @InjectMetric(NOTIFICATION_DELIVERY_SUCCESS_TOTAL)
-    private readonly success: Counter<string>,
-    @InjectMetric(NOTIFICATION_DELIVERY_FAILED_TOTAL)
-    private readonly failed: Counter<string>,
-    @InjectMetric(NOTIFICATION_DLQ_DEPTH)
-    private readonly dlqDepth: Gauge<string>,
-  ) {}
+  constructor(private readonly metricsService: MetricsService) {}
 
-  recordConsumed(eventType: string): void {
-    this.consumed.inc({ event_type: eventType });
+  recordConsumed(_eventType: string): void {
+    // Message-level success/retry/DLQ metrics are recorded by RabbitMqRetryInterceptor.
   }
 
   recordSuccess(channel: string, eventType?: string): void {
-    this.success.inc({ channel, event_type: eventType ?? 'unknown' });
+    this.metricsService.recordNotificationDelivery({
+      channel,
+      event: eventType ?? 'unknown',
+      status: 'success',
+    });
   }
 
   recordFailure(channel: string, eventType?: string): void {
-    this.failed.inc({ channel, event_type: eventType ?? 'unknown' });
+    this.metricsService.recordNotificationDelivery({
+      channel,
+      event: eventType ?? 'unknown',
+      status: 'failure',
+    });
   }
 
-  setDlqDepth(depth: number): void {
-    this.dlqDepth.set(depth);
+  setDlqDepth(_depth: number): void {
+    // DLQ counters are recorded by the common RabbitMQ retry interceptor.
   }
 }

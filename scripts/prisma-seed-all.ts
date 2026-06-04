@@ -17,12 +17,14 @@ const appsDir = path.resolve(process.cwd(), 'apps');
 const preferredSeedOrder = [
   'identity-service',
   'user-service',
+  'media-service',
   'question-service',
   'exam-service',
   'course-service',
   'analytics-service',
   'notification-service',
   'simulation-service',
+  'audit-service',
 ];
 
 function readPackageJson(packageJsonPath: string): PackageJson {

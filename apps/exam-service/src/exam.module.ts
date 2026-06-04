@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
+import { createRabbitMqClientOptions } from '@repo/common';
 import { EventPublisher } from './application/ports/event-publisher.port';
 import { QuestionPoolClient } from './application/ports/question-pool.client';
 import { UserProfileClient } from './application/ports/user-profile.client';
@@ -29,6 +30,10 @@ import {
   RABBITMQ_CLIENT,
   RabbitMqEventPublisher,
 } from './infrastructure/messaging/rabbitmq-event-publisher.service';
+import {
+  AUDIT_SERVICE_CLIENT,
+  AuditOutboxRelayService,
+} from './infrastructure/outbox/audit-outbox-relay.service';
 import { PrismaExamSessionRepository } from './infrastructure/persistence/prisma/prisma-exam-session.repository';
 import { PrismaExamTemplateRepository } from './infrastructure/persistence/prisma/prisma-exam-template.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
@@ -40,22 +45,8 @@ import { ExamReviewController } from './presentation/http/exam-review.controller
 
 const rmqClientFactory = (queue: string) => ({
   inject: [ConfigService],
-  useFactory: (config: ConfigService) => ({
-    transport: Transport.RMQ as const,
-    options: {
-      urls: [config.get<string>('rabbitmq.url') ?? 'amqp://127.0.0.1:5672'],
-      queue,
-      queueOptions:
-        queue === 'notification_service_events'
-          ? {
-              durable: true,
-              arguments: {
-                'x-dead-letter-exchange': 'notification.dlx',
-              },
-            }
-          : { durable: true },
-    },
-  }),
+  useFactory: (config: ConfigService) =>
+    createRabbitMqClientOptions(config, queue),
 });
 
 @Module({
@@ -69,6 +60,10 @@ const rmqClientFactory = (queue: string) => ({
       {
         name: NOTIFICATION_SERVICE_CLIENT,
         ...rmqClientFactory('notification_service_events'),
+      },
+      {
+        name: AUDIT_SERVICE_CLIENT,
+        ...rmqClientFactory('audit_service_events'),
       },
     ]),
   ],
@@ -86,6 +81,7 @@ const rmqClientFactory = (queue: string) => ({
     { provide: ExamTemplateRepository, useClass: PrismaExamTemplateRepository },
     { provide: ExamSessionRepository, useClass: PrismaExamSessionRepository },
     { provide: EventPublisher, useClass: RabbitMqEventPublisher },
+    AuditOutboxRelayService,
     { provide: QuestionPoolClient, useClass: HttpQuestionPoolClient },
     { provide: UserProfileClient, useClass: HttpUserProfileClient },
     CreateTemplateUseCase,

@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { DomainEvent } from '@repo/common';
+import { DomainEvent, withCorrelationId } from '@repo/common';
 import { lastValueFrom } from 'rxjs';
+import { IdentityEventPublisherPort } from '../../application/ports/identity-event-publisher.port';
 
 export const USER_SERVICE_CLIENT = 'USER_SERVICE_CLIENT';
 export const NOTI_SERVICE_CLIENT = 'NOTI_SERVICE';
@@ -18,7 +19,7 @@ const USER_ONLY_EVENTS = new Set([
 ]);
 
 @Injectable()
-export class IdentityEventPublisher {
+export class IdentityEventPublisher extends IdentityEventPublisherPort {
   private readonly logger = new Logger(IdentityEventPublisher.name);
 
   constructor(
@@ -26,18 +27,22 @@ export class IdentityEventPublisher {
     private readonly userServiceClient: ClientProxy,
     @Inject(NOTI_SERVICE_CLIENT)
     private readonly notiServiceClient: ClientProxy,
-  ) {}
+  ) {
+    super();
+  }
 
   async publish(event: DomainEvent): Promise<void> {
+    const payload = withCorrelationId(event);
+
     try {
       if (USER_AND_NOTI_EVENTS.has(event.eventName)) {
         await Promise.all([
-          lastValueFrom(this.userServiceClient.emit(event.eventName, event)),
-          lastValueFrom(this.notiServiceClient.emit(event.eventName, event)),
+          lastValueFrom(this.userServiceClient.emit(event.eventName, payload)),
+          lastValueFrom(this.notiServiceClient.emit(event.eventName, payload)),
         ]);
       } else if (USER_ONLY_EVENTS.has(event.eventName)) {
         await lastValueFrom(
-          this.userServiceClient.emit(event.eventName, event),
+          this.userServiceClient.emit(event.eventName, payload),
         );
       }
       this.logger.log(`Published event: ${event.eventName}`);

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import {
   AuthGuard,
   KeycloakConnectModule,
@@ -11,7 +12,14 @@ import {
   TokenValidation,
 } from 'nest-keycloak-connect';
 import Redis from 'ioredis';
-import { ConsulConfigFactory } from '@repo/common';
+import {
+  AppLoggerModule,
+  ConsulConfigFactory,
+  HealthModule,
+  MetricsModule,
+  TokenBlacklistModule,
+  TokenBlacklistGuard,
+} from '@repo/common';
 import Joi from 'joi';
 import {
   GetManeuverUseCase,
@@ -21,18 +29,64 @@ import {
   StartSimulationSessionUseCase,
   SubmitSimulationSessionUseCase,
 } from './application/use-cases/simulation.use-cases';
+import {
+  EndPractice2dSessionUseCase,
+  GetPractice2dSessionUseCase,
+  IngestPractice2dTelemetryUseCase,
+  StartPractice2dSessionUseCase,
+} from './application/use-cases/practice2d/practice2d.use-cases';
+import { EventPublisher } from './application/ports/event-publisher.port';
+import { Practice2dSessionRepository } from './domain/repositories/practice2d-session.repository';
 import { SimulationRepository } from './domain/repositories/simulation.repository';
 import {
   ManeuverErrorCacheService,
   REDIS_CLIENT,
 } from './infrastructure/cache/maneuver-error-cache.service';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
+import { PrismaPractice2dSessionRepository } from './infrastructure/persistence/prisma/prisma-practice2d-session.repository';
 import { PrismaSimulationRepository } from './infrastructure/persistence/prisma/prisma-simulation.repository';
+import {
+  RABBITMQ_CLIENT,
+  RabbitMqEventPublisher,
+} from './infrastructure/messaging/rabbitmq-event-publisher.service';
 import { SimulationController } from './presentation/http/simulation.controller';
 
 @Module({
   imports: [
+    AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'simulation-service',
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        { name: 'redis', configKey: 'redis.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
+    }),
+    MetricsModule.register({ serviceName: 'simulation-service' }),
+    ClientsModule.registerAsync([
+      {
+        name: RABBITMQ_CLIENT,
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [
+              configService.get<string>('rabbitmq.url') ??
+                'amqp://localhost:5672',
+            ],
+            queue: 'simulation_service_publish',
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+    ]),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({
@@ -66,6 +120,7 @@ import { SimulationController } from './presentation/http/simulation.controller'
               realm: Joi.string().default('luyen-thi-lai-xe-realm'),
               clientId: Joi.string().default('nestjs-backend'),
               clientSecret: Joi.string().optional(),
+              timeoutMs: Joi.number().default(10000),
             }).default(),
           }).unknown(true),
           'simulation-service',
@@ -86,6 +141,7 @@ import { SimulationController } from './presentation/http/simulation.controller'
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [SimulationController],
   providers: [
@@ -108,13 +164,23 @@ import { SimulationController } from './presentation/http/simulation.controller'
     },
     ManeuverErrorCacheService,
     { provide: SimulationRepository, useClass: PrismaSimulationRepository },
+    {
+      provide: Practice2dSessionRepository,
+      useClass: PrismaPractice2dSessionRepository,
+    },
+    { provide: EventPublisher, useClass: RabbitMqEventPublisher },
     ListManeuversUseCase,
     GetManeuverUseCase,
     ListManeuverErrorsUseCase,
     StartSimulationSessionUseCase,
     SaveSimulationAnswerUseCase,
     SubmitSimulationSessionUseCase,
+    StartPractice2dSessionUseCase,
+    IngestPractice2dTelemetryUseCase,
+    EndPractice2dSessionUseCase,
+    GetPractice2dSessionUseCase,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

@@ -33,6 +33,7 @@ enum EnrollmentStatus {
 
 model Course {
   id              String          @id @default(uuid())
+  courseCode      String?         @unique
   title           String          @db.Text
   description     String?         @db.Text
   licenseCategory LicenseCategory
@@ -41,6 +42,10 @@ model Course {
   tuitionFee      Decimal         @default(0) @db.Decimal(12, 2)
   capacity        Int?
   status          CourseStatus    @default(DRAFT)
+  version         Int             @default(1)
+  isDeleted       Boolean         @default(false)
+  deletedAt       DateTime?
+  deletedBy       String?
   createdById     String
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -52,6 +57,7 @@ model Course {
   enrollments CourseEnrollment[]
 
   @@index([licenseCategory, status, createdAt])
+  @@index([isDeleted, status, createdAt])
   @@index([createdById, createdAt])
   @@map("courses")
 }
@@ -116,6 +122,7 @@ model CourseEnrollment {
   progress    Int              @default(0)
   enrolledAt  DateTime         @default(now())
   completedAt DateTime?
+  lastResetAt DateTime?
 
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
@@ -131,4 +138,26 @@ model StudentLicenseProfile {
   updatedAt   DateTime        @updatedAt
 
   @@map("student_license_profiles")
+}
+
+enum OutboxMessageStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model OutboxMessage {
+  id            String              @id @default(uuid())
+  eventName     String
+  payload       Json
+  status        OutboxMessageStatus @default(PENDING)
+  attempts      Int                 @default(0)
+  nextAttemptAt DateTime            @default(now())
+  publishedAt   DateTime?
+  lastError     String?             @db.Text
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@map("outbox_messages")
 }

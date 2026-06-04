@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -10,12 +11,14 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { NotificationType } from '@prisma/notification-client';
 import { AuthenticatedUser, Roles } from 'nest-keycloak-connect';
 import { NotificationEventPublisher } from '../../application/ports/event-publisher.port';
 import {
   ListNotificationsUseCase,
   MarkNotificationReadUseCase,
 } from '../../application/use-cases/notification.use-cases';
+import { NotificationRepository } from '../../domain/repositories/notification.repository';
 import {
   AcademicWarningAcceptedResponseDto,
   ListNotificationsQueryDto,
@@ -36,30 +39,70 @@ export class NotificationController {
     private readonly listNotificationsUseCase: ListNotificationsUseCase,
     private readonly markNotificationReadUseCase: MarkNotificationReadUseCase,
     private readonly eventPublisher: NotificationEventPublisher,
+    private readonly notificationRepository: NotificationRepository,
   ) {}
 
   @Post('admin/academic-warnings')
   @HttpCode(HttpStatus.ACCEPTED)
   @Roles({ roles: ['realm:ADMIN', 'realm:CENTER_MANAGER', 'realm:INSTRUCTOR'] })
   @ApiOperation({
-    summary:
-      'Đưa cảnh báo học tập của học viên vào hàng đợi (bất đồng bộ, trả về 202).',
+    summary: 'Queue academic warnings for asynchronous notification delivery.',
   })
   async sendAcademicWarning(
     @AuthenticatedUser() user: JwtPayload,
     @Body() dto: SendAcademicWarningRequestDto,
   ): Promise<AcademicWarningAcceptedResponseDto> {
-    await this.eventPublisher.publish('notification.academic-warning.queued', {
-      studentId: dto.studentId,
-      reason: dto.reason,
-      severity: dto.severity,
-      message: dto.message,
-      createdById: user.sub ?? '',
-    });
+    const studentIds = [
+      ...(dto.studentId ? [dto.studentId] : []),
+      ...(dto.studentIds ?? []),
+    ].filter((value, index, items) => items.indexOf(value) === index);
+
+    if (studentIds.length === 0) {
+      throw new BadRequestException(
+        'At least one student recipient is required',
+      );
+    }
+
+    const unsupportedChannels = (
+      dto.deliveryChannels ?? [NotificationType.IN_APP]
+    ).filter((channel) => channel !== NotificationType.IN_APP);
+    if (unsupportedChannels.length > 0) {
+      throw new BadRequestException(
+        'Only IN_APP delivery can be requested from this endpoint; EMAIL/PUSH are resolved by notification-service config and event payload.',
+      );
+    }
+
+    const warnings = await Promise.all(
+      studentIds.map((studentId) =>
+        this.notificationRepository.createAcademicWarning({
+          studentId,
+          reason: dto.reason,
+          severity: dto.severity,
+          message: dto.message,
+          createdById: user.sub ?? '',
+        }),
+      ),
+    );
+
+    await Promise.all(
+      warnings.map((warning) =>
+        this.eventPublisher.publish('notification.academic-warning.queued', {
+          warningId: warning.id,
+          studentId: warning.studentId,
+          reason: dto.reason,
+          severity: dto.severity,
+          message: dto.message,
+          createdById: user.sub ?? '',
+        }),
+      ),
+    );
+
     return {
       status: 'ACCEPTED',
+      accepted: studentIds.length,
+      studentIds,
       message:
-        'Cảnh báo học tập đã được đưa vào hàng đợi; học viên sẽ nhận thông báo bất đồng bộ.',
+        'Academic warning notifications were queued for asynchronous delivery.',
     };
   }
 
@@ -72,7 +115,7 @@ export class NotificationController {
       'realm:STUDENT',
     ],
   })
-  @ApiOperation({ summary: 'Liệt kê thông báo của người dùng hiện tại' })
+  @ApiOperation({ summary: 'List current user notifications' })
   async listMine(
     @AuthenticatedUser() user: JwtPayload,
     @Query() query: ListNotificationsQueryDto,
@@ -94,7 +137,7 @@ export class NotificationController {
       'realm:STUDENT',
     ],
   })
-  @ApiOperation({ summary: 'Đánh dấu một thông báo là đã đọc' })
+  @ApiOperation({ summary: 'Mark a notification as read' })
   async markRead(
     @AuthenticatedUser() user: JwtPayload,
     @Param('id') id: string,

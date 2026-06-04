@@ -5,6 +5,7 @@ import {
   Prisma,
 } from '@prisma/notification-client';
 import {
+  AcademicWarningDeliveryStatus,
   AcademicWarningRecord,
   CreateNotificationInput,
   NotificationRecord,
@@ -36,7 +37,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
         status: input.status ?? NotificationStatus.DELIVERED,
         retryCount: input.retryCount ?? 0,
         errorMessage: input.errorMessage ?? null,
-        sentAt: sentAt,
+        sentAt,
         deliveredAt: input.deliveredAt ?? null,
       },
     });
@@ -49,7 +50,50 @@ export class PrismaNotificationRepository extends NotificationRepository {
     message: string;
     createdById: string;
   }): Promise<AcademicWarningRecord> {
-    return this.prisma.academicWarning.create({ data: input });
+    const record = await this.prisma.academicWarning.create({ data: input });
+    return this.mapAcademicWarning(record);
+  }
+
+  async updateAcademicWarningDelivery(
+    id: string,
+    input: {
+      deliveryStatus: AcademicWarningDeliveryStatus;
+      notificationId?: string | null;
+      lastError?: string | null;
+      queuedAt?: Date | null;
+      nextRetryAt?: Date | null;
+      retryAttempts?: number;
+    },
+  ): Promise<AcademicWarningRecord> {
+    const record = await this.prisma.academicWarning.update({
+      where: { id },
+      data: {
+        deliveryStatus: input.deliveryStatus as never,
+        notificationId: input.notificationId,
+        lastError: input.lastError,
+        queuedAt: input.queuedAt,
+        nextRetryAt: input.nextRetryAt,
+        ...(input.retryAttempts !== undefined && {
+          retryAttempts: input.retryAttempts,
+        }),
+      },
+    });
+    return this.mapAcademicWarning(record);
+  }
+
+  async findWarningsDueForRetry(
+    now: Date,
+    take: number,
+  ): Promise<AcademicWarningRecord[]> {
+    const records = await this.prisma.academicWarning.findMany({
+      where: {
+        deliveryStatus: AcademicWarningDeliveryStatus.PENDING_RETRY as never,
+        OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }],
+      },
+      orderBy: { createdAt: 'asc' },
+      take,
+    });
+    return records.map((record) => this.mapAcademicWarning(record));
   }
 
   async findByUser(
@@ -98,5 +142,28 @@ export class PrismaNotificationRepository extends NotificationRepository {
             : undefined,
       },
     });
+  }
+
+  private mapAcademicWarning(record: {
+    id: string;
+    studentId: string;
+    reason: string;
+    severity: string;
+    message: string;
+    createdById: string;
+    deliveryStatus: unknown;
+    retryAttempts: number;
+    nextRetryAt: Date | null;
+    notificationId: string | null;
+    lastError: string | null;
+    queuedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): AcademicWarningRecord {
+    return {
+      ...record,
+      deliveryStatus:
+        record.deliveryStatus as unknown as AcademicWarningDeliveryStatus,
+    };
   }
 }

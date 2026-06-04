@@ -1,12 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ClientsModule } from '@nestjs/microservices';
 import {
-  makeCounterProvider,
-  makeGaugeProvider,
-  PrometheusModule,
-} from '@willsoto/nestjs-prometheus';
+  AppLoggerModule,
+  ConsulConfigFactory,
+  createRabbitMqClientOptions,
+  HealthModule,
+  MetricsModule,
+  TokenBlacklistGuard,
+  TokenBlacklistModule,
+} from '@repo/common';
+import Joi from 'joi';
 import {
   AuthGuard,
   KeycloakConnectModule,
@@ -16,8 +21,6 @@ import {
   RoleGuard,
   TokenValidation,
 } from 'nest-keycloak-connect';
-import { ConsulConfigFactory } from '@repo/common';
-import Joi from 'joi';
 import { NotificationEventPublisher } from './application/ports/event-publisher.port';
 import { MailProvider } from './application/ports/mail.provider';
 import { PushProvider } from './application/ports/push.provider';
@@ -25,6 +28,7 @@ import { NotificationDispatcher } from './application/use-cases/notification-dis
 import {
   ListNotificationsUseCase,
   MarkNotificationReadUseCase,
+  RetryAcademicWarningsUseCase,
 } from './application/use-cases/notification.use-cases';
 import { RegisterDeviceTokenUseCase } from './application/use-cases/register-device-token.use-case';
 import { SendAcademicWarningUseCase } from './application/use-cases/send-academic-warning.use-case';
@@ -35,23 +39,11 @@ import { SendWelcomeEmailUseCase } from './application/use-cases/send-welcome-em
 import { UnregisterDeviceTokenUseCase } from './application/use-cases/unregister-device-token.use-case';
 import { DeviceTokenRepository } from './domain/repositories/device-token.repository';
 import { NotificationRepository } from './domain/repositories/notification.repository';
-import {
-  NOTIFICATION_DELIVERY_FAILED_TOTAL,
-  NOTIFICATION_DELIVERY_SUCCESS_TOTAL,
-  NOTIFICATION_DLQ_DEPTH,
-  NOTIFICATION_MESSAGES_CONSUMED_TOTAL,
-  NotificationMetrics,
-} from './infrastructure/metrics/notification.metrics';
+import { NotificationMetrics } from './infrastructure/metrics/notification.metrics';
 import {
   NOTIFICATION_EVENT_CLIENT,
   RabbitMqNotificationEventPublisher,
 } from './infrastructure/messaging/notification-event.publisher';
-import {
-  NOTIFICATION_DLX_EXCHANGE,
-  NOTIFICATION_QUEUE,
-} from './infrastructure/messaging/rabbitmq.constants';
-import { RabbitMqTopologyService } from './infrastructure/messaging/rabbitmq-topology.service';
-import { RetryPublisher } from './infrastructure/messaging/retry.publisher';
 import { PrismaDeviceTokenRepository } from './infrastructure/persistence/prisma/prisma-device-token.repository';
 import { PrismaNotificationRepository } from './infrastructure/persistence/prisma/prisma-notification.repository';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
@@ -63,7 +55,22 @@ import { MessagingController } from './presentation/messaging/messaging.controll
 
 @Module({
   imports: [
+    AppLoggerModule,
+    HealthModule.register({
+      serviceName: 'notification-service',
+      dependencies: [
+        { name: 'database', configKey: 'database.url' },
+        { name: 'rabbitmq', configKey: 'rabbitmq.url' },
+        {
+          name: 'keycloak',
+          configKey: 'keycloak.authServerUrl',
+          kind: 'http',
+        },
+      ],
+    }),
+    MetricsModule.register({ serviceName: 'notification-service' }),
     ConfigModule.forRoot({
+      envFilePath: ConsulConfigFactory.envFilePaths(),
       load: [
         ConsulConfigFactory.create(
           Joi.object({
@@ -94,6 +101,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
               realm: Joi.string().default('luyen-thi-lai-xe-realm'),
               clientId: Joi.string().default('nestjs-backend'),
               clientSecret: Joi.string().optional(),
+              timeoutMs: Joi.number().default(10000),
             }).default(),
             smtp: Joi.object({
               host: Joi.string().default('localhost'),
@@ -109,6 +117,9 @@ import { MessagingController } from './presentation/messaging/messaging.controll
               maxAttempts: Joi.number().default(3),
               intervalMs: Joi.number().default(300000),
             }).default(),
+            notification: Joi.object({
+              warningRetryIntervalMs: Joi.number().default(300000),
+            }).default(),
           }).unknown(true),
           'notification-service',
         ),
@@ -119,27 +130,13 @@ import { MessagingController } from './presentation/messaging/messaging.controll
       {
         name: NOTIFICATION_EVENT_CLIENT,
         inject: [ConfigService],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              configService.get<string>('rabbitmq.url') ??
-                'amqp://localhost:5672',
-            ],
-            queue: NOTIFICATION_QUEUE,
-            queueOptions: {
-              durable: true,
-              arguments: {
-                'x-dead-letter-exchange': NOTIFICATION_DLX_EXCHANGE,
-              },
-            },
-          },
-        }),
+        useFactory: (configService: ConfigService) =>
+          createRabbitMqClientOptions(
+            configService,
+            'notification_service_events',
+          ),
       },
     ]),
-    PrometheusModule.register({
-      defaultLabels: { service: 'notification-service' },
-    }),
     KeycloakConnectModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService): KeycloakConnectOptions => ({
@@ -153,6 +150,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
         tokenValidation: TokenValidation.OFFLINE,
       }),
     }),
+    TokenBlacklistModule,
   ],
   controllers: [
     NotificationController,
@@ -170,6 +168,7 @@ import { MessagingController } from './presentation/messaging/messaging.controll
       useClass: RabbitMqNotificationEventPublisher,
     },
     NotificationDispatcher,
+    NotificationMetrics,
     SendWelcomeEmailUseCase,
     SendExamResultUseCase,
     SendAcademicWarningUseCase,
@@ -177,31 +176,11 @@ import { MessagingController } from './presentation/messaging/messaging.controll
     SendCourseUpdateUseCase,
     ListNotificationsUseCase,
     MarkNotificationReadUseCase,
+    RetryAcademicWarningsUseCase,
     RegisterDeviceTokenUseCase,
     UnregisterDeviceTokenUseCase,
-    RabbitMqTopologyService,
-    RetryPublisher,
-    NotificationMetrics,
-    makeCounterProvider({
-      name: NOTIFICATION_MESSAGES_CONSUMED_TOTAL,
-      help: 'Total number of notification events consumed from RabbitMQ.',
-      labelNames: ['event_type'],
-    }),
-    makeCounterProvider({
-      name: NOTIFICATION_DELIVERY_SUCCESS_TOTAL,
-      help: 'Total number of notifications delivered successfully.',
-      labelNames: ['channel', 'event_type'],
-    }),
-    makeCounterProvider({
-      name: NOTIFICATION_DELIVERY_FAILED_TOTAL,
-      help: 'Total number of notification delivery failures.',
-      labelNames: ['channel', 'event_type'],
-    }),
-    makeGaugeProvider({
-      name: NOTIFICATION_DLQ_DEPTH,
-      help: 'Current depth of the notification dead-letter queue.',
-    }),
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: TokenBlacklistGuard },
     { provide: APP_GUARD, useClass: RoleGuard },
     { provide: APP_GUARD, useClass: ResourceGuard },
   ],

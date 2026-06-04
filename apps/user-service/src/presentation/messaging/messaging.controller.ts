@@ -78,6 +78,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle identity.user.created: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 
@@ -100,6 +101,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle identity.user.updated: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 
@@ -118,6 +120,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle identity.user.role-changed: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 
@@ -136,6 +139,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle identity.user.locked: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 
@@ -154,6 +158,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle identity.user.deleted: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 
@@ -181,6 +186,7 @@ export class MessagingController {
       this.logger.error(
         `Failed to handle media.file.deleted: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 }
