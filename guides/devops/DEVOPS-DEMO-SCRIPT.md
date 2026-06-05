@@ -349,8 +349,6 @@ Mở file:
 - `charts/luyen-thi-lai-xe/templates/jobs.yaml`
 - `charts/luyen-thi-lai-xe/templates/hpa.yaml`
 - `guides/devops/GCP-SETUP.md`
-- `docs/phase-3-4-5-9-operations.md`
-- `docs/phase-9-gcp-iac-load-test.md`
 
 Nội dung cần trình bày:
 

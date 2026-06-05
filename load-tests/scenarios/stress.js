@@ -97,9 +97,6 @@ export const options = {
  */
 export default function () {
   // Lấy số VU hiện tại để điều chỉnh hành vi
-  const vuId = __VU;
-  const iteration = __ITER;
-
   // === LUỒNG 1: Người dùng duyệt nội dung (tất cả VUs) ===
 
   // Đăng nhập

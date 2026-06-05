@@ -38,7 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     if: inputs.target_environment == 'staging' && inputs.confirm_rollback == true
-    environment: staging
+    environment:
+      name: ${{ inputs.target_environment }}
     concurrency:
       group: deploy-gcp-staging
       cancel-in-progress: false
@@ -62,6 +63,15 @@ jobs:
       - uses: azure/setup-helm@v4
 
       - uses: azure/setup-kubectl@v4
+
+      - name: Validate rollback inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$TARGET_REVISION" =~ ^[0-9]+$ ]]; then
+            echo "helm_revision must be a numeric Helm revision: $TARGET_REVISION" >&2
+            exit 1
+          fi
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -127,6 +137,7 @@ jobs:
           helm rollback "$RELEASE_NAME" "$TARGET_REVISION" \
             --namespace "$NAMESPACE" \
             --wait \
+            --wait-for-jobs \
             --timeout 15m
           helm history "$RELEASE_NAME" -n "$NAMESPACE"
 
@@ -185,7 +196,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     if: inputs.target_environment == 'production' && inputs.confirm_rollback == true
-    environment: production
+    environment:
+      name: ${{ inputs.target_environment }}
     concurrency:
       group: deploy-gcp-production
       cancel-in-progress: false
@@ -206,6 +218,15 @@ jobs:
       - uses: azure/setup-helm@v4
 
       - uses: azure/setup-kubectl@v4
+
+      - name: Validate rollback inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$TARGET_REVISION" =~ ^[0-9]+$ ]]; then
+            echo "helm_revision must be a numeric Helm revision: $TARGET_REVISION" >&2
+            exit 1
+          fi
 
       - name: Configure kubeconfig
         shell: bash
@@ -238,6 +259,7 @@ jobs:
           helm rollback "$RELEASE_NAME" "$TARGET_REVISION" \
             --namespace "$NAMESPACE" \
             --wait \
+            --wait-for-jobs \
             --timeout 15m
           helm history "$RELEASE_NAME" -n "$NAMESPACE"
 

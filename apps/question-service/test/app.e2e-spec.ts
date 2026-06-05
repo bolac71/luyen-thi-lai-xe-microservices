@@ -15,6 +15,16 @@ import { UpdateTopicUseCase } from '../src/application/use-cases/update-topic/up
 import { GetTopicUseCase } from '../src/application/use-cases/get-topic/get-topic.use-case';
 import { ListTopicsUseCase } from '../src/application/use-cases/list-topics/list-topics.use-case';
 
+interface QuestionListEnvelope {
+  success: boolean;
+  data: {
+    items: unknown[];
+    total: number;
+    page: number;
+    size: number;
+  };
+}
+
 describe('QuestionController (e2e smoke)', () => {
   let app: INestApplication<App>;
 
@@ -55,8 +65,9 @@ describe('QuestionController (e2e smoke)', () => {
       .get('/admin/questions')
       .expect(200)
       .expect((response) => {
-        expect(response.body.success).toBe(true);
-        expect(response.body.data).toEqual({
+        const body = response.body as unknown as QuestionListEnvelope;
+        expect(body.success).toBe(true);
+        expect(body.data).toEqual({
           items: [],
           total: 0,
           page: 1,

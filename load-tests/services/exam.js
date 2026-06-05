@@ -43,7 +43,7 @@ export function testListExams() {
         try {
           JSON.parse(r.body);
           return true;
-        } catch (e) {
+        } catch {
           return false;
         }
       },
@@ -106,8 +106,8 @@ export function testCreateExam() {
       'Tạo exam: response có ID': (r) => {
         try {
           const body = JSON.parse(r.body);
-          return !!(body.id || (body.data && body.data.id));
-        } catch (e) {
+          return !!(body.id || body.data?.id);
+        } catch {
           return false;
         }
       },
@@ -152,7 +152,7 @@ export function testStartExam() {
             body.sessionId ||
             (body.data && (body.data.questions || body.data.sessionId))
           );
-        } catch (e) {
+        } catch {
           return false;
         }
       },
@@ -204,7 +204,7 @@ export function testSubmitExam() {
             (body.data &&
               (body.data.score !== undefined || body.data.result !== undefined))
           );
-        } catch (e) {
+        } catch {
           return false;
         }
       },

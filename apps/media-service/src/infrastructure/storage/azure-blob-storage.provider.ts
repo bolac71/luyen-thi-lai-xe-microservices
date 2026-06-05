@@ -93,7 +93,7 @@ export class AzureBlobStorageProvider
     this.logger.log(`Deleted blob: ${key}`);
   }
 
-  async getPresignedUrl(key: string, expiresIn?: number): Promise<string> {
+  getPresignedUrl(key: string, expiresIn?: number): Promise<string> {
     const ttl = expiresIn ?? this.defaultPresignedUrlExpiry;
     const blockBlobClient = this.getClient()
       .getContainerClient(this.containerName)
@@ -110,10 +110,10 @@ export class AzureBlobStorageProvider
       credential,
     ).toString();
 
-    return `${blockBlobClient.url}?${sasToken}`;
+    return Promise.resolve(`${blockBlobClient.url}?${sasToken}`);
   }
 
-  async generateUploadSasUrl(
+  generateUploadSasUrl(
     key: string,
     mimeType: string,
     expiresIn?: number,
@@ -135,10 +135,10 @@ export class AzureBlobStorageProvider
       credential,
     ).toString();
 
-    return {
+    return Promise.resolve({
       uploadUrl: `${blockBlobClient.url}?${sasToken}`,
       publicUrl: blockBlobClient.url,
-    };
+    });
   }
 
   private getClient(): BlobServiceClient {

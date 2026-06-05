@@ -141,7 +141,7 @@ export class AppService {
           `Upstream OpenAPI spec returned ${response.status} ${response.statusText}`,
         );
       }
-      const document = await response.json();
+      const document: unknown = await response.json();
       return this.withUpstreamServer(document, upstreamUrl);
     } finally {
       clearTimeout(timer);
@@ -259,7 +259,10 @@ export class AppService {
             })
             .catch(err => {
               console.error('Failed to load services:', err);
-              document.getElementById('service-selector-container').style.display = 'none';
+              const selector = document.getElementById('service-selector');
+              if (selector) {
+                selector.style.display = 'none';
+              }
             });
 
           Scalar.createApiReference('#app', {

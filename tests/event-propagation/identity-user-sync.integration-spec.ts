@@ -2,6 +2,14 @@ import axios from 'axios';
 
 const KONG_BASE_URL = 'http://localhost:8000';
 
+interface UserProfileResponse {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  isActive: boolean;
+}
+
 describe('Identity to User Service Event Synchronization (Integration)', () => {
   let adminToken: string;
 
@@ -49,7 +57,7 @@ describe('Identity to User Service Event Synchronization (Integration)', () => {
 
     // 3. Chờ đồng bộ bất đồng bộ qua RabbitMQ (Eventual Consistency)
     // Thực hiện gọi thử (polling) API của user-service tối đa 10 lần (mỗi lần cách nhau 500ms)
-    let userProfile: any = null;
+    let userProfile: UserProfileResponse | null = null;
     const maxRetries = 10;
     const retryIntervalMs = 500;
 
@@ -67,7 +75,7 @@ describe('Identity to User Service Event Synchronization (Integration)', () => {
           userProfile = profileResponse.data.data;
           break;
         }
-      } catch (error) {
+      } catch {
         // Ignored: profile may not be created yet, so user-service might return 404
       }
       await new Promise((resolve) => setTimeout(resolve, retryIntervalMs));
@@ -75,6 +83,9 @@ describe('Identity to User Service Event Synchronization (Integration)', () => {
 
     // 4. Khẳng định (Assert) profile đã được tạo thành công bên user-service với đúng thông tin
     expect(userProfile).not.toBeNull();
+    if (!userProfile) {
+      throw new Error('User profile was not synchronized');
+    }
     expect(userProfile.id).toBe(userId);
     expect(userProfile.email).toBe(testUserEmail);
     expect(userProfile.fullName).toBe(testUserFullName);
