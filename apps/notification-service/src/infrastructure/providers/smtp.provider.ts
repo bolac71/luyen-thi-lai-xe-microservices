@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import {
   MailProvider,
   SendMailInput,
@@ -10,7 +11,7 @@ import {
 @Injectable()
 export class SmtpMailProvider extends MailProvider implements OnModuleInit {
   private readonly logger = new Logger(SmtpMailProvider.name);
-  private transporter!: Transporter;
+  private transporter!: Transporter<SMTPTransport.SentMessageInfo>;
   private fromAddress!: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -30,13 +31,14 @@ export class SmtpMailProvider extends MailProvider implements OnModuleInit {
       'no-reply@luyen-thi-lai-xe.local';
 
     const auth = user ? { user, pass } : undefined;
-    this.transporter = nodemailer.createTransport({
+    const options: SMTPTransport.Options = {
       host,
       port,
       secure,
       requireTLS: starttls,
       auth,
-    });
+    };
+    this.transporter = nodemailer.createTransport(options);
     this.logger.log(`Đã sẵn sàng kết nối SMTP (host=${host} port=${port})`);
   }
 

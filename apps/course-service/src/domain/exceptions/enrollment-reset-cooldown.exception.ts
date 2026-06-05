@@ -5,7 +5,7 @@ export class EnrollmentResetCooldownException extends DomainException {
 
   constructor(enrollmentId: string, hoursRemaining: number) {
     super(
-      `Invalid reset-learning-progress request. Cooldown active. Please wait ${hoursRemaining.toFixed(
+      `Invalid reset-learning-progress request for enrollment ${enrollmentId}. Cooldown active. Please wait ${hoursRemaining.toFixed(
         1,
       )} hours. (MSG104)`,
     );

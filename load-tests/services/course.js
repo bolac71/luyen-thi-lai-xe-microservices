@@ -37,7 +37,7 @@ export function testListCourses() {
         try {
           JSON.parse(r.body);
           return true;
-        } catch (e) {
+        } catch {
           return false;
         }
       },
@@ -165,7 +165,7 @@ export function testListEnrollments() {
         try {
           JSON.parse(r.body);
           return true;
-        } catch (e) {
+        } catch {
           return false;
         }
       },

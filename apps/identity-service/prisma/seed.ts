@@ -213,58 +213,6 @@ async function ensureManagedRealmRoles(
   }
 }
 
-async function getUserRealmRoles(
-  adminBaseUrl: string,
-  token: string,
-  userId: string,
-): Promise<KeycloakRoleRepresentation[]> {
-  const response = await axios.get<KeycloakRoleRepresentation[]>(
-    `${adminBaseUrl}/users/${userId}/role-mappings/realm`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  return response.data;
-}
-
-async function assignRealmRole(
-  adminBaseUrl: string,
-  token: string,
-  userId: string,
-  roleName: string,
-): Promise<void> {
-  const role = await getRealmRole(adminBaseUrl, token, roleName);
-  const currentRoles = await getUserRealmRoles(adminBaseUrl, token, userId);
-  const managedRoles = currentRoles.filter((item) =>
-    MANAGED_REALM_ROLES.includes(
-      item.name as (typeof MANAGED_REALM_ROLES)[number],
-    ),
-  );
-
-  if (managedRoles.length > 0) {
-    await axios.delete(`${adminBaseUrl}/users/${userId}/role-mappings/realm`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: managedRoles,
-    });
-  }
-
-  await axios.post(
-    `${adminBaseUrl}/users/${userId}/role-mappings/realm`,
-    [role],
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-}
-
-async function resetPassword(
-  adminBaseUrl: string,
-  token: string,
-  userId: string,
-): Promise<void> {
-  await axios.put(
-    `${adminBaseUrl}/users/${userId}/reset-password`,
-    { type: 'password', value: DEMO_PASSWORD, temporary: false },
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-}
-
 async function deleteKeycloakUser(
   adminBaseUrl: string,
   token: string,

@@ -182,8 +182,8 @@ export class PrismaNotificationRepository extends NotificationRepository {
   }): NotificationRecord {
     return {
       ...record,
-      type: record.type as unknown as NotificationType,
-      status: record.status as unknown as NotificationStatus,
+      type: record.type as NotificationType,
+      status: record.status as NotificationStatus,
     };
   }
 
@@ -205,8 +205,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
   }): AcademicWarningRecord {
     return {
       ...record,
-      deliveryStatus:
-        record.deliveryStatus as unknown as AcademicWarningDeliveryStatus,
+      deliveryStatus: record.deliveryStatus as AcademicWarningDeliveryStatus,
     };
   }
 }

@@ -16,7 +16,7 @@ import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 import { BASE_URL, JSON_HEADERS, authHeaders } from '../config.js';
 import { login, loginAsDefaultUser } from '../helpers/auth.js';
-import { generateRegistrationData, randomEmail } from '../helpers/data.js';
+import { generateRegistrationData } from '../helpers/data.js';
 
 /**
  * Test luồng đăng nhập thành công
@@ -47,7 +47,7 @@ export function testLogin() {
             body.access_token ||
             (body.data && (body.data.accessToken || body.data.access_token))
           );
-        } catch (e) {
+        } catch {
           return false;
         }
       },
@@ -105,7 +105,7 @@ export function testRegister() {
         try {
           const body = JSON.parse(r.body);
           return body !== null && body !== undefined;
-        } catch (e) {
+        } catch {
           return false;
         }
       },
@@ -141,8 +141,8 @@ export function testGetProfile() {
       'Profile: có thông tin email': (r) => {
         try {
           const body = JSON.parse(r.body);
-          return !!(body.email || (body.data && body.data.email));
-        } catch (e) {
+          return !!(body.email || body.data?.email);
+        } catch {
           return false;
         }
       },

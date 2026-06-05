@@ -2,7 +2,6 @@
 
 Tài liệu này gom phần quan trọng nhất để team dev chạy local, verify code và nắm nhanh các luồng DevOps hiện có trong repo.
 
-File roadmap việc tiếp theo: [README.NEXT-STEPS.md](./README.NEXT-STEPS.md)
 Tổng kết DevOps hiện tại: [DEVOPS-SUMMARY.md](./DEVOPS-SUMMARY.md)
 
 ## 1. Tổng quan

@@ -45,7 +45,7 @@ export function login(username, password) {
           (body.data && body.data.accessToken !== undefined) ||
           (body.data && body.data.access_token !== undefined)
         );
-      } catch (e) {
+      } catch {
         return false;
       }
     },
@@ -97,7 +97,7 @@ export function register(userData) {
         return (
           body.id !== undefined || (body.data && body.data.id !== undefined)
         );
-      } catch (e) {
+      } catch {
         return false;
       }
     },
@@ -164,7 +164,7 @@ export function refreshToken(refreshToken) {
       (body.data && (body.data.accessToken || body.data.access_token)) ||
       null
     );
-  } catch (e) {
+  } catch {
     return null;
   }
 }

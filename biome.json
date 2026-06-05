@@ -9,8 +9,10 @@
       "**",
       "!**/.claude",
       "!**/.turbo",
+      "!**/coverage",
       "!**/dist",
       "!**/node_modules",
+      "!reports",
       "!**/backups"
     ]
   },

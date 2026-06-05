@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { DomainException } from '@repo/common';
 
 export class InvalidEmailException extends DomainException {

@@ -5,6 +5,7 @@ import {
   ExamSessionResult,
   ListExamSessionsResult,
 } from '../shared/exam-session.result';
+import { ExamSessionStatus } from '../../../domain/aggregates/exam-session/exam-session.types';
 import { ListSessionsQuery } from './list-sessions.query';
 
 @Injectable()
@@ -29,7 +30,7 @@ export class ListSessionsUseCase
       result.items.map((session) =>
         ExamSessionResult.fromAggregate(
           session,
-          session.status !== 'IN_PROGRESS',
+          session.status !== ExamSessionStatus.IN_PROGRESS,
         ),
       ),
       result.total,

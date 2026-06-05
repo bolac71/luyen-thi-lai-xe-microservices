@@ -55,6 +55,13 @@ export class AppController {
     return this.appService.buildPlaceholderDocument();
   }
 
+  @Get('docs')
+  @Header('content-type', 'text/html; charset=utf-8')
+  @SetMetadata('skip-api-response', true)
+  getScalarDefault(): Promise<string> {
+    return this.appService.renderScalarPage('');
+  }
+
   @Get('docs-proxy')
   @SetMetadata('skip-api-response', true)
   async getDocsProxy(
