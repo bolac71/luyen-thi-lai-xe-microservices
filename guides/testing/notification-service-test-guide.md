@@ -11,6 +11,51 @@ npm --workspace=apps/notification-service run start:dev
 
 Use a real Keycloak token. Frontend and Swagger calls should send `Authorization: Bearer <access_token>`; do not send `x-user-id`.
 
+## Firebase Push Setup
+
+Root `.env` cần có `FCM_CREDENTIALS` là Firebase service-account JSON trên một dòng. Không commit file JSON credential rời vào repo.
+
+Sau khi cập nhật `.env`, seed lại Consul rồi restart notification-service:
+
+```powershell
+npm run consul:seed:local
+npm --workspace=apps/notification-service run start:dev
+```
+
+Nếu `FCM_CREDENTIALS` trống, service vẫn chạy và PUSH sẽ được skip có kiểm soát. In-app/email không bị ảnh hưởng.
+
+## Frontend Device Token Flow
+
+Trên thiết bị thật hoặc emulator có Firebase Messaging:
+
+1. Cấu hình Firebase app:
+   - Android: thêm `google-services.json`.
+   - iOS: thêm `GoogleService-Info.plist` và cấu hình APNs key/certificate trong Firebase Console.
+2. Xin quyền notification từ hệ điều hành.
+3. Lấy FCM registration token từ Firebase Messaging SDK.
+4. Đăng ký token với backend:
+
+```http
+POST http://localhost:3006/notifications/devices
+Authorization: Bearer <student_token>
+Content-Type: application/json
+
+{
+  "token": "<fcm_registration_token>",
+  "platform": "android"
+}
+```
+
+5. Khi Firebase refresh token, gọi lại endpoint trên với token mới.
+6. Khi logout hoặc tắt push, URL-encode token rồi hủy đăng ký:
+
+```http
+DELETE http://localhost:3006/notifications/devices/<url_encoded_fcm_registration_token>
+Authorization: Bearer <student_token>
+```
+
+Foreground test: app cần tự hiển thị local notification nếu muốn thấy banner khi đang mở app. Background/quit test: đưa app xuống background, trigger event có kênh PUSH, rồi kiểm tra system tray của thiết bị.
+
 ## Send Academic Warning
 
 ```http

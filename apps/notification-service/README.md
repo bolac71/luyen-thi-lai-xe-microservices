@@ -148,6 +148,51 @@ URL hay dùng:
 | `POST`   | `/admin/academic-warnings`         | `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR` | Queue academic warning, trả `202 Accepted`        |
 | `GET`    | `/metrics`                         | Prometheus/internal                     | Scrape metrics                                    |
 
+## Frontend Push Notification Integration
+
+Mobile/frontend không gửi notification trực tiếp. App chỉ lấy FCM registration token từ Firebase SDK rồi đăng ký token đó với notification-service.
+
+Backend cần `FCM_CREDENTIALS` trong root `.env`. Sau khi cập nhật `.env`, chạy lại:
+
+```bash
+npm run consul:seed:local
+```
+
+Sau đó restart `notification-service` để provider khởi tạo Firebase Admin SDK với credential mới.
+
+Luồng frontend:
+
+1. Cài Firebase SDK đúng platform và cấu hình app Firebase:
+   - Android: dùng `google-services.json` trong Android app.
+   - iOS: dùng `GoogleService-Info.plist` và bật APNs key/certificate trong Firebase Console.
+   - Flutter/React Native/Expo: dùng package Firebase Messaging tương ứng của stack frontend.
+2. Sau login hoặc khi app start, xin quyền notification từ hệ điều hành.
+3. Lấy FCM registration token từ Firebase Messaging SDK.
+4. Gửi token lên backend bằng JWT của user hiện tại:
+
+```http
+POST /notifications/devices
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "token": "<fcm_registration_token>",
+  "platform": "android"
+}
+```
+
+5. Khi Firebase báo token refresh, gọi lại `POST /notifications/devices` với token mới. Endpoint này upsert theo token nên gọi lặp lại là an toàn.
+6. Khi user logout hoặc tắt nhận push trên thiết bị, URL-encode token rồi gọi:
+
+```http
+DELETE /notifications/devices/<url_encoded_fcm_registration_token>
+Authorization: Bearer <access_token>
+```
+
+7. Foreground: app cần tự hiển thị local notification nếu muốn người dùng thấy banner ngay khi app đang mở. Background/quit: notification payload từ backend sẽ được OS/Firebase đưa vào system tray nếu app đã cấu hình đúng.
+
+Backend hiện gửi push cho các event `exam.session.passed`, `exam.session.failed`, `notification.academic-warning.queued`, và `course.updated`. Nếu user chưa có device token hoặc FCM chưa cấu hình, PUSH sẽ được skip có kiểm soát; in-app/email vẫn hoạt động theo kênh tương ứng.
+
 Ví dụ tạo academic warning:
 
 ```http

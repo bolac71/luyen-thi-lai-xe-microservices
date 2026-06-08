@@ -1,11 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import crypto from 'node:crypto';
-import { MailProvider } from '../ports/mail.provider';
-import {
-  PushMessage,
-  PushProvider,
-  PushSendResult,
-} from '../ports/push.provider';
 import { DeviceTokenRepository } from '../../domain/repositories/device-token.repository';
 import {
   Notification,
@@ -14,6 +8,12 @@ import {
   NotificationType,
 } from '../../domain/repositories/notification.repository';
 import { NotificationMetrics } from '../../infrastructure/metrics/notification.metrics';
+import { MailProvider } from '../ports/mail.provider';
+import {
+  PushMessage,
+  PushProvider,
+  PushSendResult,
+} from '../ports/push.provider';
 
 export interface DispatchInput {
   eventType: string;
@@ -27,10 +27,10 @@ export interface DispatchInput {
   retryCount?: number;
 }
 
-/**
- * Coordinates the actual delivery (IN_APP record + optional email + optional push)
- * and keeps NotificationRecord status in sync.
- */
+interface DeliveryOutcome {
+  skipped: boolean;
+}
+
 @Injectable()
 export class NotificationDispatcher {
   private readonly logger = new Logger(NotificationDispatcher.name);
@@ -59,13 +59,17 @@ export class NotificationDispatcher {
       const record = await this.repository.createNotification(notification);
 
       try {
-        await this.deliverOne(channel, record, input);
+        const outcome = await this.deliverOne(channel, record, input);
         const deliveredNotification = Notification.reconstitute(record);
         deliveredNotification.markDelivered();
         const delivered = await this.repository.saveNotificationDelivery(
           deliveredNotification,
         );
-        this.metrics.recordSuccess(channel, input.eventType);
+        if (outcome.skipped) {
+          this.metrics.recordSkipped(channel, input.eventType);
+        } else {
+          this.metrics.recordSuccess(channel, input.eventType);
+        }
         created.push(delivered);
       } catch (error) {
         const message =
@@ -87,16 +91,15 @@ export class NotificationDispatcher {
     channel: NotificationType,
     record: NotificationRecord,
     input: DispatchInput,
-  ): Promise<void> {
+  ): Promise<DeliveryOutcome> {
     if (channel === NotificationType.IN_APP) {
-      // IN_APP is delivered by persisting the record; nothing else to do.
-      return;
+      return { skipped: false };
     }
 
     if (channel === NotificationType.EMAIL) {
       if (!input.recipientEmail) {
         throw new Error(
-          `Không thể gửi thông báo EMAIL ${record.id}: thiếu địa chỉ email của người nhận`,
+          `Cannot send EMAIL notification ${record.id}: recipient email is missing`,
         );
       }
       await this.mailProvider.send({
@@ -105,37 +108,64 @@ export class NotificationDispatcher {
         text: input.body,
         html: input.html,
       });
-      return;
+      return { skipped: false };
     }
 
     if (channel === NotificationType.PUSH) {
-      const tokens = await this.deviceTokenRepository.findByUser(input.userId);
-      if (tokens.length === 0) {
-        this.logger.warn(
-          `Người dùng ${input.userId} chưa đăng ký device token nào; bỏ qua push cho ${record.id}`,
-        );
-        return;
-      }
-      const message: PushMessage = {
-        title: input.title,
-        body: input.body,
-        data: this.flattenData(input.data),
-      };
-      const result: PushSendResult = await this.pushProvider.sendToTokens(
-        tokens.map((t) => t.token),
-        message,
-      );
-      if (result.invalidTokens.length > 0) {
-        await this.deviceTokenRepository.deleteManyTokens(result.invalidTokens);
-        this.logger.log(
-          `Đã xóa ${result.invalidTokens.length} device token không hợp lệ`,
-        );
-      }
-      if (result.successCount === 0 && tokens.length > 0) {
-        throw new Error('Tất cả push của thông báo này đều gửi thất bại');
-      }
-      return;
+      return this.deliverPush(record, input);
     }
+
+    return { skipped: true };
+  }
+
+  private async deliverPush(
+    record: NotificationRecord,
+    input: DispatchInput,
+  ): Promise<DeliveryOutcome> {
+    const tokens = await this.deviceTokenRepository.findByUser(input.userId);
+    if (tokens.length === 0) {
+      this.logger.warn(
+        `User ${input.userId} has no registered device tokens; skipping push for ${record.id}`,
+      );
+      return { skipped: true };
+    }
+
+    const message: PushMessage = {
+      title: input.title,
+      body: input.body,
+      data: this.flattenData(input.data),
+    };
+    const result: PushSendResult = await this.pushProvider.sendToTokens(
+      tokens.map((token) => token.token),
+      message,
+    );
+
+    if (result.invalidTokens.length > 0) {
+      await this.deviceTokenRepository.deleteManyTokens(result.invalidTokens);
+      this.logger.log(
+        `Deleted ${result.invalidTokens.length} invalid device token(s)`,
+      );
+    }
+
+    if (result.successCount > 0) {
+      return { skipped: false };
+    }
+
+    if (result.retryableFailureCount > 0) {
+      throw new Error(
+        'All push delivery attempts failed with retryable errors',
+      );
+    }
+
+    const skippedCount = result.skippedCount + result.invalidTokens.length;
+    if (skippedCount > 0 || result.failureCount > 0) {
+      this.logger.warn(
+        `Push delivery for ${record.id} was skipped or had only non-retryable failures`,
+      );
+      return { skipped: true };
+    }
+
+    return { skipped: true };
   }
 
   private flattenData(

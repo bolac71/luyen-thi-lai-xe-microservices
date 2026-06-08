@@ -309,11 +309,55 @@ Trả về notifications của current user theo thứ tự mới nhất trướ
 
 ### DELETE `/notifications/devices/:token`
 
+Token trong path nên được URL-encode từ frontend vì FCM registration token có thể chứa ký tự đặc biệt. Backend chỉ xóa token thuộc current user đọc từ JWT `sub`.
+
 Xóa một device token registration.
 
 **Auth:** `ADMIN`, `CENTER_MANAGER`, `INSTRUCTOR`, `STUDENT`
 
 **Response:** `204 No Content`
+
+---
+
+## Frontend Push Notification Integration
+
+Frontend/mobile không gửi push trực tiếp. App lấy FCM registration token từ Firebase Messaging SDK, sau đó đăng ký token với notification-service bằng JWT của user hiện tại.
+
+### Register token
+
+```http
+POST /notifications/devices
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "token": "<fcm_registration_token>",
+  "platform": "android"
+}
+```
+
+`platform` hiện chấp nhận `android` hoặc `ios`. Endpoint upsert theo token, nên frontend có thể gọi lại sau login, app start, hoặc khi Firebase refresh token.
+
+### Unregister token
+
+```http
+DELETE /notifications/devices/<url_encoded_fcm_registration_token>
+Authorization: Bearer <access_token>
+```
+
+Backend chỉ xóa token thuộc current user đọc từ JWT `sub`.
+
+### Frontend requirements
+
+- Cài Firebase SDK đúng platform.
+- Android app cần `google-services.json`; iOS app cần `GoogleService-Info.plist` và APNs key/certificate đã bật trong Firebase Console.
+- Xin quyền notification trước khi lấy token trên các platform yêu cầu runtime permission.
+- Gửi token lên backend sau login/app start và gửi lại khi token refresh.
+- Khi logout hoặc user tắt push, gọi DELETE với token đã URL-encode.
+- Khi app foreground, frontend nên tự hiển thị local notification nếu muốn user thấy banner ngay.
+- Khi app background/quit, notification payload từ backend sẽ được OS/Firebase đưa vào system tray nếu app đã cấu hình đúng.
+
+Nếu `FCM_CREDENTIALS` trống, notification-service skip PUSH có kiểm soát và không đưa message vào retry/DLQ chỉ vì local/dev chưa có Firebase credential. Nếu đã cấu hình credential nhưng Firebase Admin init/send lỗi retryable, RabbitMQ retry/DLQ xử lý như các lỗi delivery khác.
 
 ---
 
