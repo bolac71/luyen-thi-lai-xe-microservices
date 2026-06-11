@@ -1,6 +1,6 @@
 # Tổng Hợp Backend & API Endpoints
 
-> Cập nhật: 09/06/2026
+> Cập nhật: 11/06/2026
 
 Tài liệu này tổng hợp toàn bộ các tính năng, kỹ thuật đã được triển khai trong hệ thống backend cũng như danh sách chi tiết các API Endpoints hiện có.
 
@@ -66,7 +66,7 @@ Hệ thống thi thử lý thuyết, quản lý đề thi, phiên làm bài (ses
   - `GET /exams/sessions/:id/result`: Xem chi tiết kết quả (tổng điểm, thời gian, câu nào sai/đúng).
 - **Exam Details & Reviews**:
   - `GET /exams/available`: Liệt kê các đề thi mẫu đang có sẵn để học viên chọn.
-  - `GET /exams/missed-questions`: Trích xuất bộ sưu tập các câu hỏi lý thuyết mà người dùng từng trả lời sai để ôn lại.
+  - `GET /exams/review/missed-questions`: Trích xuất bộ sưu tập các câu hỏi lý thuyết mà người dùng từng trả lời sai để ôn lại.
 - **Admin**:
   - `GET /admin/exams/sessions`: Admin giám sát lịch sử thi thử của toàn bộ hệ thống.
   - `POST /admin/exams/templates`: Tạo mẫu đề thi mới.
@@ -113,8 +113,8 @@ Dịch vụ cung cấp Ngân hàng câu hỏi trắc nghiệm (phục vụ thi v
 
 ### 6. Notification Service (`/notifications/*`, `/admin/academic-warnings/*`)
 Quản lý thông báo In-app và Push Notification tới thiết bị.
-- `POST /notifications/device-token`: (Client gửi) Đăng ký Token thiết bị (FCM/APNS) để có thể nhận Push Notification.
-- `DELETE /notifications/device-token/:token`: Gỡ bỏ Device Token khi đăng xuất.
+- `POST /notifications/devices`: (Client gửi) Đăng ký Token thiết bị (FCM/APNS) để có thể nhận Push Notification.
+- `DELETE /notifications/devices/:token`: Gỡ bỏ Device Token khi đăng xuất.
 - `GET /notifications/me`: Đọc hộp thư In-app notification của user hiện tại.
 - `PATCH /notifications/:id/read`: Đánh dấu "Đã đọc" cho một thông báo.
 - `POST /admin/academic-warnings`: Admin (hoặc trigger tự động) phát đi Cảnh báo học tập (ví dụ: nghỉ quá nhiều, chưa nộp bằng...).
@@ -142,14 +142,38 @@ Hệ thống ôn luyện thực hành và sa hình 2D/3D.
 
 ### 9. Media Service (`/media/*`, `/admin/media/*`)
 Xử lý lưu trữ, tối ưu hóa và xuất URL các file định dạng ảnh/video.
-- `POST /media`: Tải trực tiếp file ảnh (dưới giới hạn dung lượng) thông qua formData.
-- `POST /media/init`: Khởi tạo quá trình Upload File Lớn (trả về presigned URLs S3 multipart/form).
-- `GET /media/:id`: Đọc metadata chuẩn của một tập tin.
-- `GET /media/:id/url`: Xin cấp URL Public (hoặc Signed Link có thời hạn) để hiển thị/stream ảnh/video trên Web.
-- `GET /admin/media`: Admin kiểm kê tất cả file có trong kho lưu trữ (Storage).
-- `DELETE /admin/media/:id`: Admin chủ động xóa file rác (Orphan files).
+- `POST /media/files`: Tải trực tiếp file ảnh (dưới giới hạn dung lượng) thông qua formData.
+- `POST /media/files/init`: Khởi tạo quá trình Upload File Lớn (trả về presigned URLs S3 multipart/form).
+- `GET /media/files/:id`: Đọc metadata chuẩn của một tập tin.
+- `GET /media/files/:id/url`: Xin cấp URL Public (hoặc Signed Link có thời hạn) để hiển thị/stream ảnh/video trên Web.
+- `GET /admin/media/files`: Admin kiểm kê tất cả file có trong kho lưu trữ (Storage).
+- `DELETE /admin/media/files/:id`: Admin chủ động xóa file rác (Orphan files).
 
 ### 10. Audit Service (`/admin/audit-logs/*`)
 Kiểm tra chéo và an ninh (Compliance & Security logs).
 - `GET /admin/audit-logs`: Admin lướt tìm và filter danh sách lịch sử truy cập, các sửa đổi đặc biệt (Role thay đổi, xóa dữ liệu quan trọng).
 - `GET /admin/audit-logs/:id`: Xem tận gốc Before-Change và After-Change JSON schema của thay đổi đó.
+
+### 11. Docs Service (`/docs/*`)
+Tài liệu OpenAPI tập trung (Môi trường Dev/Local).
+- `GET /docs-config`: Cấu hình cho UI Scalar.
+- `GET /docs-services`: Lấy danh sách các service.
+- `GET /docs-json` & `GET /docs-proxy`: Cung cấp JSON specs.
+- `GET /docs`: Render giao diện Scalar API document chính.
+
+### 12. Common Endpoints (Toàn bộ các Services)
+Tích hợp sẵn từ thư viện `@repo/common` cho Kubernetes probes và Prometheus metrics.
+- `GET /health` & `GET /health/live` & `GET /health/ready`: Liveness/Readiness checks.
+- `GET /metrics`: Metric export cho Prometheus.
+
+---
+
+## 🐇 Tổng Hợp Async Event Endpoints (RabbitMQ)
+Ngoài các HTTP REST API, hệ thống microservices còn giao tiếp thông qua cơ chế bất đồng bộ (Message Broker) với các Event Controllers sau:
+
+- **Analytics Service**: Lắng nghe `identity.user.created`, `exam.session.completed`, `course.enrollment.*`, `course.lesson.completed` để cập nhật tiến độ học tập.
+- **Audit Service**: Lắng nghe `security.audit.recorded` để lưu log an ninh.
+- **Course Service**: Lắng nghe `user.student.license-assigned` và `media.file.deleted` để cập nhật/xóa tài nguyên tương ứng.
+- **Media Service**: Lắng nghe các event xác nhận file đã được sử dụng (`user.avatar.linked`, `course.material.linked`, `question.image.linked`) để chuyển trạng thái file thành `LINKED`.
+- **Notification Service**: Lắng nghe `identity.user.created`, `identity.user.password-reset-requested`, `exam.session.passed/.failed`, `course.updated`, `notification.academic-warning.queued` để bắn email/push notification.
+- **User Service**: Lắng nghe `identity.user.*` (created, updated, role-changed, locked, deleted) từ Keycloak webhook để đồng bộ hồ sơ, và `media.file.deleted` để gỡ ảnh đại diện nếu file bị xóa.
