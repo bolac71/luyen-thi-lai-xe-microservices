@@ -3,6 +3,10 @@ name: Main Image Release
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "docs/**"
 
 permissions:
   contents: read
@@ -404,8 +408,15 @@ jobs:
           IMAGE_REPO="ghcr.io/${{ github.repository_owner }}/luyen-thi-lai-xe-migration-runner"
           IMAGE_TAG="${IMAGE_REPO}:${{ github.sha }}"
 
-          docker push "$IMAGE_TAG"
-          docker push "${IMAGE_REPO}:latest"
+          docker buildx build \
+            --file Dockerfile.migration-runner \
+            --tag "$IMAGE_TAG" \
+            --tag "${IMAGE_REPO}:latest" \
+            --cache-from type=gha,scope=migration-runner \
+            --cache-to type=gha,mode=max,scope=migration-runner \
+            --provenance=false \
+            --push \
+            .
 
           DIGEST="$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')"
           IMAGE_REF="${IMAGE_REPO}@${DIGEST}"
