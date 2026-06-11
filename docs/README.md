@@ -14,6 +14,7 @@ Thư mục `docs/` là nguồn tài liệu chính của repo. Nếu cần đọc
 
 Nhóm này là nguồn chính cho API contract của service. Mỗi file nên mô tả endpoint, auth/role, request, response, error code, event side effect, Swagger URL và ghi chú frontend.
 
+- [Tổng Hợp Backend & API Endpoints](./api/backend-summary.md)
 - [Kong + Frontend Integration](./api/kong-frontend-integration.md)
 - [Scalar API Reference Guide](./api/scalar-api-reference-guide.md)
 - [Health & Metrics API](./api/api-spec-health-metrics.md)

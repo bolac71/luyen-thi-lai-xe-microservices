@@ -1,6 +1,6 @@
 # Tổng Hợp Backend & API Endpoints
 
-> Cập nhật: 09/06/2026
+> Cập nhật: 11/06/2026
 
 Tài liệu này tổng hợp toàn bộ các tính năng, kỹ thuật đã được triển khai trong hệ thống backend cũng như danh sách chi tiết các API Endpoints hiện có.
 
@@ -165,3 +165,15 @@ Tài liệu OpenAPI tập trung (Môi trường Dev/Local).
 Tích hợp sẵn từ thư viện `@repo/common` cho Kubernetes probes và Prometheus metrics.
 - `GET /health` & `GET /health/live` & `GET /health/ready`: Liveness/Readiness checks.
 - `GET /metrics`: Metric export cho Prometheus.
+
+---
+
+## 🐇 Tổng Hợp Async Event Endpoints (RabbitMQ)
+Ngoài các HTTP REST API, hệ thống microservices còn giao tiếp thông qua cơ chế bất đồng bộ (Message Broker) với các Event Controllers sau:
+
+- **Analytics Service**: Lắng nghe `identity.user.created`, `exam.session.completed`, `course.enrollment.*`, `course.lesson.completed` để cập nhật tiến độ học tập.
+- **Audit Service**: Lắng nghe `security.audit.recorded` để lưu log an ninh.
+- **Course Service**: Lắng nghe `user.student.license-assigned` và `media.file.deleted` để cập nhật/xóa tài nguyên tương ứng.
+- **Media Service**: Lắng nghe các event xác nhận file đã được sử dụng (`user.avatar.linked`, `course.material.linked`, `question.image.linked`) để chuyển trạng thái file thành `LINKED`.
+- **Notification Service**: Lắng nghe `identity.user.created`, `identity.user.password-reset-requested`, `exam.session.passed/.failed`, `course.updated`, `notification.academic-warning.queued` để bắn email/push notification.
+- **User Service**: Lắng nghe `identity.user.*` (created, updated, role-changed, locked, deleted) từ Keycloak webhook để đồng bộ hồ sơ, và `media.file.deleted` để gỡ ảnh đại diện nếu file bị xóa.
